@@ -6,7 +6,7 @@ import { listSupports, replaceSupports, replaceSupportTests, supportAsOfBySymbol
 import { lastCompletedSession } from "@/lib/market/calendar";
 import { stockProvider } from "@/lib/stock";
 import { historyStats } from "@/lib/profile/history";
-import { computeSupports, SUPPORT_BARS } from "@/lib/support/calculate";
+import { computeSupports, SUPPORT_BARS, SUPPORT_LOGIC_VERSION } from "@/lib/support/calculate";
 import { trackLevels } from "@/lib/support/track";
 import { findLateEvents } from "@/lib/alerts/lateCheck";
 import type { LateItem } from "@/lib/alerts/format";
@@ -67,7 +67,9 @@ export async function recalculate(symbols: string[], now: Date, opts: { force?: 
     try {
       const completed = candles.filter((c) => c.date <= session);
       const result = computeSupports(completed.slice(-SUPPORT_BARS));
-      const events = findLateEvents(symbol, previous.filter((p) => p.symbol === symbol), completed, {
+      // levels from an older version of the logic are not what users were told about lately: don't report on them
+      const mine = previous.filter((p) => p.symbol === symbol && p.logicVersion === SUPPORT_LOGIC_VERSION);
+      const events = findLateEvents(symbol, mine, completed, {
         tiers: alertTiers,
         isArmed: (tier) => states.get(stateKey(symbol, tier))?.armed ?? true,
       });

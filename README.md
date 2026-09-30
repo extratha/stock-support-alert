@@ -244,6 +244,8 @@ cp .env.example .env.local
    npm run db:migrate   # อ่าน DATABASE_URL จาก environment
    ```
    หรือ `set -a; source .env.local; set +a; npm run db:migrate`
+   หลังจากนั้น **Vercel รัน migrate ให้เองทุกครั้งที่ deploy production** (script `vercel-build` = `db:migrate` แล้ว `next build`) ใช้ `DATABASE_URL` จาก env ของ Vercel — schema เป็นแบบรันซ้ำได้ (เพิ่มเฉพาะที่ยังไม่มี) ถ้าต่อฐานข้อมูลไม่ได้ build จะล้มและเวอร์ชันเดิมยังออนไลน์อยู่ · preview deployment ไม่แตะฐานข้อมูล
+   เมื่อวิธีคำนวณแนวรับเปลี่ยน (`SUPPORT_LOGIC_VERSION`) รอบคำนวณถัดไปจะคำนวณใหม่ทุกตัวเอง ไม่ต้องรอวันทำการใหม่
 
 ### 3. LINE Official Account
 1. https://developers.line.biz/console/ → สร้าง **Provider** → สร้าง channel ชนิด **Messaging API** (จะสร้าง OA ให้อัตโนมัติ)

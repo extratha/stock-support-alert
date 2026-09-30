@@ -4,6 +4,13 @@ import { swingZones } from "./swing";
 import type { Candle, Method, SupportCandidate, SupportResult, Tier, TieredSupport } from "./types";
 import { TIERS } from "./types";
 
+/**
+ * Bump when the levels a given price history produces change (methods, tiers, parameters). Stored with every level;
+ * levels from another version are recalculated on the next run instead of waiting for a new trading day.
+ * 1 = daily pivots + MA + swing low + Fibonacci; 2 = structural only (swing zones, MA, Fibonacci).
+ */
+export const SUPPORT_LOGIC_VERSION = 2;
+
 /** Bars the live system feeds in: every indicator only looks at the last ones (MA200 needs 200, swing zones scan 250). */
 export const SUPPORT_BARS = 260;
 

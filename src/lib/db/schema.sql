@@ -125,6 +125,9 @@ create table if not exists stock_profiles (
 -- Swing Low levels are zones now: the bottom of the zone and how many times the price bounced there (null for other methods).
 alter table support_levels add column if not exists zone_low numeric(14, 4);
 alter table support_levels add column if not exists touches integer;
+-- Which version of the support logic produced the row (SUPPORT_LOGIC_VERSION in src/lib/support/calculate.ts).
+-- Rows from an older version count as out of date, so the next recalculation replaces them even on the same day.
+alter table support_levels add column if not exists logic_version integer not null default 1;
 
 -- Every touch of a support level when the current logic is replayed over the stock's own history (see
 -- src/lib/support/track.ts): did the level hold or break? Replaced for a symbol by each daily recalculation.

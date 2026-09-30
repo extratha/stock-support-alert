@@ -1,4 +1,5 @@
 import type { LevelTest } from "@/lib/support/track";
+import { SUPPORT_LOGIC_VERSION } from "@/lib/support/calculate";
 import type { Method, Tier, TieredSupport } from "@/lib/support/types";
 import { sql, transaction } from "./client";
 
@@ -11,6 +12,8 @@ export interface StoredSupport {
   /** the close the levels were computed from */
   refClose: number;
   asOf: string;
+  /** SUPPORT_LOGIC_VERSION that produced it */
+  logicVersion: number;
 }
 
 /**
@@ -24,11 +27,13 @@ export async function replaceSupports(symbol: string, asOf: string, refClose: nu
   await transaction(async (tx) => {
     for (const t of tiers) {
       await tx`
-        insert into support_levels (symbol, tier, price, method, zone_low, touches, ref_close, as_of)
-        values (${symbol}, ${t.tier}, ${t.price}, ${t.method}, ${t.zoneLow ?? null}, ${t.touches ?? null}, ${refClose}, ${asOf})
+        insert into support_levels (symbol, tier, price, method, zone_low, touches, ref_close, as_of, logic_version)
+        values (${symbol}, ${t.tier}, ${t.price}, ${t.method}, ${t.zoneLow ?? null}, ${t.touches ?? null}, ${refClose}, ${asOf},
+                ${SUPPORT_LOGIC_VERSION})
         on conflict (symbol, tier) do update
           set price = excluded.price, method = excluded.method, zone_low = excluded.zone_low, touches = excluded.touches,
-              ref_close = excluded.ref_close, as_of = excluded.as_of, computed_at = now()`;
+              ref_close = excluded.ref_close, as_of = excluded.as_of, logic_version = excluded.logic_version,
+              computed_at = now()`;
     }
     if (tiers.length === 0) {
       await tx`delete from support_levels where symbol = ${symbol}`;
@@ -41,13 +46,17 @@ export async function replaceSupports(symbol: string, asOf: string, refClose: nu
 export async function listSupports(): Promise<StoredSupport[]> {
   return sql()<StoredSupport[]>`
     select symbol, tier, method, price::float8 as price, zone_low::float8 as "zoneLow", ref_close::float8 as "refClose",
-           as_of::text as "asOf" from support_levels`;
+           as_of::text as "asOf", logic_version as "logicVersion" from support_levels`;
 }
 
-/** symbol -> as_of date of its cached levels, used to skip already-fresh symbols. */
+/**
+ * symbol -> as_of date of its cached levels, used to skip already-fresh symbols. Levels made by an older version of
+ * the logic don't count, so a release that changes the logic takes effect on the next run.
+ */
 export async function supportAsOfBySymbol(): Promise<Record<string, string>> {
   const rows = await sql()<{ symbol: string; as_of: string }[]>`
-    select symbol, max(as_of)::text as as_of from support_levels group by symbol`;
+    select symbol, max(as_of)::text as as_of from support_levels
+    where logic_version = ${SUPPORT_LOGIC_VERSION} group by symbol`;
   return Object.fromEntries(rows.map((r) => [r.symbol, r.as_of]));
 }
 
