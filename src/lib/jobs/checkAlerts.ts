@@ -25,16 +25,34 @@ export interface CheckSummary {
 const timeLabel = (now: Date) => `${formatDateTime(now, MARKET_TZ)} (เวลานิวยอร์ก)`;
 
 /**
- * "intraday" (default): run every ~30 min while the market is open, judge by current price.
- * "daily": run once, 4 hours after the open (the cron fires at 13:30 ET), and today's low counts as a touch.
- *          A run is accepted from 13:30 until the close: GitHub's scheduled runs are often 15-60 min late, and
- *          a narrow window used to drop the whole day. The first run that finishes records the day, so the
- *          other UTC cron candidate (or a late duplicate) the same day does nothing.
+ * "intraday": run every ~30 min while the market is open, judge by current price.
+ * "daily" (what the workflow uses): a few fixed checks a day, and today's low so far counts as a touch.
+ *   - 10:30 ET, an hour after the open (21:30-22:30 in Thailand, while the user is still up; the open is
+ *     when prices swing most)
+ *   - 13:30 ET, mid-session
+ *   The after-close pass in the evening recalculation covers touches after the last one.
+ *   Each check is accepted from its time until the next one (the last until the close): GitHub's scheduled runs
+ *   are often 15-60 min late. The first complete run of a check records it for the day, so the other UTC cron
+ *   candidate (DST) or a late duplicate does nothing. A tier alerted by an earlier check is not alerted again
+ *   before the price bounces (its state is claimed), so a second check only sends new touches.
  */
 export type CheckMode = "intraday" | "daily";
-const DAILY_RUN_AFTER_OPEN_MIN = 4 * 60;
-const DAILY_WINDOW_MIN = 150; // 13:30 -> 16:00
-const DAILY_JOB = "daily-check";
+/** minutes after the 09:30 open, earliest first */
+const DAILY_CHECKS = [60, 240];
+const DAILY_LAST_WINDOW_MIN = 150; // 13:30 -> 16:00
+
+/** Which daily check `now` belongs to, as its job_runs key ("daily-check-1030"), or null outside all of them. */
+export function dailyCheckSlot(now: Date): string | null {
+  for (let i = DAILY_CHECKS.length - 1; i >= 0; i--) {
+    const start = DAILY_CHECKS[i];
+    const window = i + 1 < DAILY_CHECKS.length ? DAILY_CHECKS[i + 1] - start : DAILY_LAST_WINDOW_MIN;
+    if (isWithinWindowAfterOpen(now, start, window)) {
+      const t = 9 * 60 + 30 + start;
+      return `daily-check-${String(Math.floor(t / 60)).padStart(2, "0")}${String(t % 60).padStart(2, "0")}`;
+    }
+  }
+  return null;
+}
 
 type SkipReason = "market_closed" | "outside_daily_window" | "already_checked_today";
 
@@ -43,9 +61,10 @@ export async function skipReason(now: Date, { force, mode }: { force?: boolean; 
   if (force) return undefined;
   if (!isMarketOpen(now)) return "market_closed";
   if (mode !== "daily") return undefined;
-  if (!isWithinWindowAfterOpen(now, DAILY_RUN_AFTER_OPEN_MIN, DAILY_WINDOW_MIN)) return "outside_daily_window";
+  const slot = dailyCheckSlot(now);
+  if (!slot) return "outside_daily_window";
   // if the bookkeeping is unavailable, better check twice than not at all (alerts are claimed, never sent twice)
-  if ((await lastRunDay(DAILY_JOB).catch(() => null)) === nyToday(now)) return "already_checked_today";
+  if ((await lastRunDay(slot).catch(() => null)) === nyToday(now)) return "already_checked_today";
   return undefined;
 }
 
@@ -72,8 +91,9 @@ export async function checkAlerts(now: Date, opts: { force?: boolean; mode?: Che
   const result = await runCheck(now, daily, summary);
   // Only a complete daily run counts: if some quotes could not be fetched, the other cron candidate tries again
   // (already-sent alerts are not repeated, their tiers are claimed).
-  if (daily && !opts.force && Object.keys(result.quoteErrors).length === 0) {
-    await markRun(DAILY_JOB, nyToday(now)).catch((e) => console.error("could not record the daily check", e));
+  const slot = daily && !opts.force ? dailyCheckSlot(now) : null;
+  if (slot && Object.keys(result.quoteErrors).length === 0) {
+    await markRun(slot, nyToday(now)).catch((e) => console.error("could not record the daily check", e));
   }
   return result.summary;
 }

@@ -37,7 +37,7 @@ export function formatAlertMessages(items: AlertItem[], timeLabel: string): stri
 /** A late event plus what replaces the level from tomorrow (null = no level of that tier below the price any more). */
 export type LateItem = LateEvent & { next: { price: number; method: Method } | null };
 
-/** The after-close summary: touches the 13:30 check could not see, and levels the price closed under. */
+/** The after-close summary: touches after the last daily check, and levels the price closed under. */
 export function formatLateMessages(items: LateItem[]): string[] {
   const blocks = items.map((e) => {
     const tier = TIER_LABEL_TH[e.tier];

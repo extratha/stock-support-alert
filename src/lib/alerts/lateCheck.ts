@@ -2,7 +2,7 @@ import type { Candle, Method, Tier } from "@/lib/support/types";
 import { DEFAULT_RULES, sameScale } from "./evaluate";
 
 /**
- * The after-close pass. The live check runs once a day (13:30 New York) and compares the price with levels fixed
+ * The after-close pass. The live checks run at fixed times (the last at 13:30 New York) and compare the price with levels fixed
  * the evening before. Anything after that run slipped through: a fall to the level late in the day, or a close
  * below it. The next recalculation then drops a level the price closed under and shows a lower one, so without this
  * pass nobody would hear that the old level was touched or broke.
