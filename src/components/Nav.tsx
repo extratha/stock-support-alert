@@ -16,22 +16,19 @@ const links: { href: string; label: string; icon: ReactNode }[] = [
 ];
 
 /**
- * Must render inside a <Link>. Shows a spinner after a short delay (no flash on fast
- * navigations) while the destination route is loading. Space is reserved, so no layout shift.
+ * The menu item's leading icon. While the destination page is loading it turns into a spinner
+ * (same 16x16 box, so nothing shifts and no empty space is reserved). Must render inside a <Link>.
  */
-function PendingIndicator() {
+function NavIcon({ icon }: { icon: ReactNode }) {
   const { pending } = useLinkStatus();
+  if (!pending) return <>{icon}</>;
   return (
-    <span
-      className={`grid size-4 place-items-center transition-opacity duration-150 ${
-        pending ? "opacity-100 delay-100" : "opacity-0"
-      }`}
-    >
-      {pending && <Spinner className="text-primary" />}
+    <>
+      <Spinner className="text-primary" />
       <span className="sr-only" role="status">
-        {pending ? "กำลังโหลด" : ""}
+        กำลังโหลด
       </span>
-    </span>
+    </>
   );
 }
 
@@ -88,9 +85,8 @@ export function Nav() {
                   : "text-muted hover:bg-elevated hover:text-foreground"
               }`}
             >
-              {l.icon}
+              <NavIcon icon={l.icon} />
               <span>{l.label}</span>
-              <PendingIndicator />
             </Link>
           );
         })}
