@@ -11,18 +11,16 @@ export interface Candle {
 export const TIERS = ["minor", "intermediate", "major"] as const;
 export type Tier = (typeof TIERS)[number];
 
-export const METHODS = [
-  "pivot_s1",
-  "pivot_s2",
-  "pivot_s3",
-  "ma50",
-  "ma200",
-  "swing_low",
-  "fib_382",
-  "fib_500",
-  "fib_618",
-] as const;
-export type Method = (typeof METHODS)[number];
+export type Method =
+  | "pivot_s1"
+  | "pivot_s2"
+  | "pivot_s3"
+  | "ma50"
+  | "ma200"
+  | "swing_low"
+  | "fib_382"
+  | "fib_500"
+  | "fib_618";
 
 /** A raw support level produced by one technical method, before tiering. */
 export interface SupportCandidate {

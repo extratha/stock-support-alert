@@ -10,7 +10,7 @@ type Json = Record<string, unknown>;
  * Twelve Data returns a flat object for one symbol and `{ SYMBOL: {...} }` for
  * several. A top-level `status: "error"` means the whole request failed.
  */
-export function splitBatch(json: Json, symbols: string[]): Record<string, Json> {
+function splitBatch(json: Json, symbols: string[]): Record<string, Json> {
   if (json.status === "error" && typeof json.code === "number" && json.code !== 404) {
     throw new Error(`Twelve Data error ${json.code}: ${String(json.message)}`);
   }

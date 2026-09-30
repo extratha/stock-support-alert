@@ -17,7 +17,7 @@ export const SUPPORT_WINDOW = 260;
 /** First day evaluated: MA200 needs 200 prior bars. */
 export const WARMUP_BARS = 200;
 /** "A real drop": a close this far below the entry within 20 trading days. */
-export const DRAWDOWN_LEVEL = 0.03;
+const DRAWDOWN_LEVEL = 0.03;
 const DD_DAYS = 20;
 
 export type Outcome = {

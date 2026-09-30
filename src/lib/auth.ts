@@ -33,7 +33,7 @@ export type AuthSetup =
   | { ok: false; reason: "misconfigured" };
 
 const DEV_SECRET = "dev-only-session-secret";
-export const MIN_SECRET_LENGTH = 16;
+const MIN_SECRET_LENGTH = 16;
 
 /**
  * Web UI login = ADMIN_USERNAME (default "admin") + ADMIN_PASSWORD; sessions are signed

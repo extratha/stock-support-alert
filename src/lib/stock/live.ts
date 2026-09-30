@@ -6,7 +6,7 @@
  * Per symbol: Finnhub first (official, free key: FINNHUB_API_KEY), then Yahoo's unofficial
  * chart endpoint as a best-effort fallback (keyless, but often blocked from datacenter IPs).
  */
-export type LiveSource = "finnhub" | "yahoo";
+type LiveSource = "finnhub" | "yahoo";
 
 export interface LivePrice {
   symbol: string;
@@ -55,7 +55,7 @@ export function parseYahooChart(symbol: string, json: Json): LivePrice | null {
 }
 
 /** One source gets this long before we move on to the next one. */
-export const SOURCE_TIMEOUT_MS = 4000;
+const SOURCE_TIMEOUT_MS = 4000;
 
 async function getJson(url: string, headers: Record<string, string>, deadline?: AbortSignal): Promise<Json> {
   // Whichever comes first: this source's own timeout, or the overall deadline of the whole request.

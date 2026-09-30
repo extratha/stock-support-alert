@@ -16,9 +16,9 @@ export interface Logo {
   source: LogoSource;
 }
 
-export const MIN_LOGO_BYTES = 200;
+const MIN_LOGO_BYTES = 200;
 export const MAX_LOGO_BYTES = 150_000;
-export const SOURCE_TIMEOUT_MS = 4000;
+const SOURCE_TIMEOUT_MS = 4000;
 
 /** Identify an image by its magic bytes. */
 export function sniffImageType(b: Uint8Array): ImageType | null {

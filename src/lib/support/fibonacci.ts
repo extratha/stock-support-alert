@@ -15,7 +15,7 @@ export interface FibOptions {
   minRange: number;
 }
 
-export const DEFAULT_FIB: FibOptions = { lookback: 120, minRange: 0.1 };
+const DEFAULT_FIB: FibOptions = { lookback: 120, minRange: 0.1 };
 
 /**
  * Fibonacci retracement of the most recent up-leg: the highest high in the

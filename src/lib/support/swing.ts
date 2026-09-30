@@ -7,7 +7,7 @@ export interface SwingOptions {
   lookback: number;
 }
 
-export const DEFAULT_SWING: SwingOptions = { wing: 5, lookback: 60 };
+const DEFAULT_SWING: SwingOptions = { wing: 5, lookback: 60 };
 
 /**
  * Local minima ("swing lows"): a bar whose low is strictly lower than the lows

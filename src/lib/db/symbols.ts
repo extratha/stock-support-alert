@@ -39,7 +39,7 @@ export async function setSymbolOrder(requested: string[]): Promise<string[]> {
 }
 
 /** Changes whenever the stored logo does, so /api/logo/SYM?v=<it> can be cached by the browser for long. null = no logo. */
-export type LogoVersion = number | null;
+type LogoVersion = number | null;
 
 export interface SymbolEntry {
   symbol: string;

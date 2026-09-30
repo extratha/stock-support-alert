@@ -21,14 +21,14 @@ const formatter = new Intl.DateTimeFormat("en-US", {
   minute: "2-digit",
 });
 
-export interface NyTime {
+interface NyTime {
   /** YYYY-MM-DD in New York. */
   date: string;
   /** Minutes since local midnight. */
   minutes: number;
 }
 
-export function nyTime(instant: Date): NyTime {
+function nyTime(instant: Date): NyTime {
   const p: Record<string, string> = {};
   for (const part of formatter.formatToParts(instant)) p[part.type] = part.value;
   return {

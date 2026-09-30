@@ -7,7 +7,7 @@ export const median = (xs: number[]) => {
   const m = s.length >> 1;
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
-export const quantile = (xs: number[], q: number) => {
+const quantile = (xs: number[], q: number) => {
   if (xs.length === 0) return NaN;
   const s = [...xs].sort((a, b) => a - b);
   return s[Math.min(s.length - 1, Math.max(0, Math.floor(q * (s.length - 1))))];
@@ -50,7 +50,7 @@ export interface SymbolBaseline {
 
 /** What to compare an event with: the random days it is "matched" to (same stock, optionally same month). */
 export type BaselineKey = (row: Row) => string;
-export const bySymbol: BaselineKey = (r) => r.symbol;
+const bySymbol: BaselineKey = (r) => r.symbol;
 /** Same stock, same calendar month: removes the effect of the market regime (bear/bull) from the comparison. */
 export const bySymbolMonth: BaselineKey = (r) => `${r.symbol}|${(r.date ?? "").slice(0, 7)}`;
 
@@ -70,7 +70,7 @@ export const bySymbolYear: BaselineKey = (r) => `${r.symbol}|${(r.date ?? "").sl
  */
 export const bySymbolYearBucket: BaselineKey = (r) => `${r.symbol}|${(r.date ?? "").slice(0, 4)}|${r.bucket ?? -1}`;
 
-export const BUCKETS = 5;
+const BUCKETS = 5;
 
 /** Builds the bucket function from the baseline days: per-stock quintile edges of prev5. */
 export function makeBucketer(samples: { symbol: string; prev5: number | null }[]): (symbol: string, prev5: number | null) => number {

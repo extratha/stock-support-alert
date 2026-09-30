@@ -1,5 +1,5 @@
 /** LINE allows 5000 characters per text message; stay under it with a safety margin. */
-export const LINE_TEXT_LIMIT = 4500;
+const LINE_TEXT_LIMIT = 4500;
 /** LINE accepts at most 5 messages per reply/push request. */
 export const LINE_MAX_MESSAGES = 5;
 

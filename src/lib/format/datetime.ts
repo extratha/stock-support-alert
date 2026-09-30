@@ -5,7 +5,7 @@
  * Built from Intl parts rather than a locale's "short" style, so server, browser and
  * Node versions can never disagree (and the Thai locale's พ.ศ. can't sneak in).
  */
-export const DISPLAY_TZ = "Asia/Bangkok";
+const DISPLAY_TZ = "Asia/Bangkok";
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
 function formatterFor(timeZone: string) {

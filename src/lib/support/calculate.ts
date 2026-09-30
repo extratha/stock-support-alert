@@ -6,10 +6,10 @@ import type { Candle, Method, SupportCandidate, SupportResult, Tier, TieredSuppo
 import { TIERS } from "./types";
 
 /** Minimum history needed to say anything useful. MA50/MA200 are skipped if shorter than their period. */
-export const MIN_CANDLES = 30;
+const MIN_CANDLES = 30;
 
 /** Two tiers must be at least this fraction apart, otherwise the lower one is pushed further down. */
-export const MIN_TIER_GAP = 0.005;
+const MIN_TIER_GAP = 0.005;
 
 /**
  * Which methods feed which tier, in the order of the spec:
@@ -28,7 +28,7 @@ const TIER_FALLBACK: Partial<Record<Tier, Method[]>> = {
 };
 
 /** Gather every support candidate from all four techniques (unfiltered). */
-export function collectCandidates(candles: Candle[]): SupportCandidate[] {
+function collectCandidates(candles: Candle[]): SupportCandidate[] {
   const last = candles[candles.length - 1];
   const out: SupportCandidate[] = [];
 
