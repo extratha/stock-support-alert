@@ -38,7 +38,8 @@ export interface StockCardData {
   quoteTimeLabel: string | null;
   asOf: string | null;
   refClose: number | null;
-  levels: { tier: Tier; price: number; method: string; zoneLow: number | null; touches: number | null }[];
+  /** `alerts` = this tier sends LINE alerts (ALERT_TIERS) */
+  levels: { tier: Tier; price: number; method: string; zoneLow: number | null; touches: number | null; alerts: boolean }[];
   /** how this stock's levels behaved when the current logic is replayed over its history */
   track: TrackSummary;
   /** fundamentals + risk figures (null until the daily job has fetched them) */
@@ -149,6 +150,9 @@ function StockCard({
 }) {
   // Live price (display only) wins; otherwise the price saved by the scheduled Twelve Data check.
   const s = { ...stock, price: live?.price ?? stock.price };
+  // A level that broke but that the price has since climbed back above is support again: don't call it broken.
+  const brk = s.track.recentBreak;
+  const stillBroken = brk !== null && (s.price === null || s.price < Math.min(brk.level, brk.zoneLow ?? brk.level));
   const priceLabel = live
     ? `ราคา ณ ${live.asOf ? formatDateTime(new Date(live.asOf)) : "—"} · ${SOURCE_LABEL[live.source]}${live.stale ? " (ค่าเก่า)" : ""}`
     : s.quoteTimeLabel
@@ -170,11 +174,10 @@ function StockCard({
         </div>
       </div>
 
-      {s.track.recentBreak && (
+      {brk && stillBroken && (
         <p className="mt-4 rounded-xl bg-danger/10 px-3 py-2 text-xs leading-relaxed text-danger ring-1 ring-danger/25">
-          {TIER_LABEL_TH[s.track.recentBreak.tier]} {usd(s.track.recentBreak.level)} (
-          {METHOD_LABEL[s.track.recentBreak.method] ?? s.track.recentBreak.method}) หลุดเมื่อ{" "}
-          {formatDateString(s.track.recentBreak.resolvedOn!)} — ระดับที่แสดงด้านล่างคือระดับถัดลงไป
+          {TIER_LABEL_TH[brk.tier]} {usd(brk.level)} ({METHOD_LABEL[brk.method] ?? brk.method}) หลุดเมื่อ{" "}
+          {formatDateString(brk.resolvedOn!)} — ระดับที่แสดงด้านล่างคือระดับถัดลงไป
         </p>
       )}
       {s.levels.length === 0 ? (
@@ -203,8 +206,12 @@ function StockCard({
                 </div>
                 <div className="justify-self-end font-mono text-sm tabular-nums">
                   {touched ? (
-                    <span className="rounded-md bg-danger/15 px-2 py-0.5 font-sans text-xs font-semibold text-danger ring-1 ring-danger/30">
-                      แตะแล้ว
+                    <span className="flex flex-col items-end gap-0.5">
+                      <span className="rounded-md bg-danger/15 px-2 py-0.5 font-sans text-xs font-semibold text-danger ring-1 ring-danger/30">
+                        แตะแล้ว
+                      </span>
+                      {/* the dashboard shows every tier; only ALERT_TIERS push to LINE */}
+                      {!l.alerts && <span className="font-sans text-[11px] text-muted">ระดับนี้ไม่แจ้ง LINE</span>}
                     </span>
                   ) : dist !== null ? (
                     <span className={dist < 2 ? "text-warning" : "text-muted"}>+{dist.toFixed(1)}%</span>

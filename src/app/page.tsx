@@ -37,6 +37,7 @@ export default async function DashboardPage() {
   }
 
   const today = nyToday();
+  const alertTiers = config.alertTiers();
   // Only plain, pre-formatted data crosses into the client component (no Dates, no hydration drift).
   const cards: StockCardData[] = stocks.map((s) => ({
     symbol: s.symbol,
@@ -45,7 +46,7 @@ export default async function DashboardPage() {
     quoteTimeLabel: s.quoteTime ? formatDateTime(s.quoteTime) : null,
     asOf: s.asOf,
     refClose: s.refClose,
-    levels: s.levels,
+    levels: s.levels.map((l) => ({ ...l, alerts: alertTiers.includes(l.tier) })),
     track: summarizeTrack(tests.filter((t) => t.symbol === s.symbol), today),
     profile: (() => {
       const p = profiles.find((x) => x.symbol === s.symbol);
@@ -59,7 +60,7 @@ export default async function DashboardPage() {
         <h1 className="text-2xl font-semibold tracking-tight">แนวรับปัจจุบัน</h1>
         <p className="mt-1 text-sm text-muted">
           กำลัง track {stocks.length} ตัว · ข้อมูลจากรอบเช็คล่าสุด · แจ้งเตือนทาง LINE เฉพาะ{" "}
-          {config.alertTiers().map((t) => TIER_LABEL_TH[t]).join(", ")}
+          {alertTiers.map((t) => TIER_LABEL_TH[t]).join(", ")}
         </p>
       </div>
       {/* key: remount with the server order whenever the symbol list/order changes */}
