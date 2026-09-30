@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireEnv } from "@/lib/config";
 import { deactivateUser, ensureFriend, upsertFollower } from "@/lib/db/lineUsers";
-import { listTrackedSymbols } from "@/lib/db/symbols";
+import { listSymbols, listTrackedSymbols } from "@/lib/db/symbols";
 import { syncProfile } from "@/lib/jobs/lineProfiles";
 import { replyText } from "@/lib/line/client";
+import { formatGuide, isHelpCommand } from "@/lib/line/guide";
 import { verifyLineSignature } from "@/lib/line/signature";
 import { formatSupportReply, parseSupportCommand } from "@/lib/line/supportCommand";
 
@@ -16,14 +17,18 @@ interface LineEvent {
   message?: { type: string; text?: string };
 }
 
-const WELCOME =
-  'เพิ่มเป็นเพื่อนแล้ว ✅\nพิมพ์ "ขอแนวรับ" เพื่อดูแนวรับปัจจุบัน (หรือ "ขอแนวรับ NVDA" เฉพาะตัวที่ต้องการ)\n' +
-  "การแจ้งเตือนอัตโนมัติต้องให้เจ้าของระบบเปิดรับให้ก่อน";
+/** Usage guide with the stocks currently tracked; if the DB hiccups the guide is still sent. */
+async function guide(welcome: boolean): Promise<string> {
+  const symbols = await listSymbols().catch(() => []);
+  return formatGuide(symbols, { welcome });
+}
 
 /**
  * LINE Messaging API webhook.
  *  - follow / unfollow: keep the friend list (line_users) up to date; push stays OFF for new friends.
- *  - any message: the sender is a friend; "ขอแนวรับ [SYMBOL...]" is answered for every friend.
+ *  - follow: a usage guide (how to ask "ขอแนวรับ ...") is sent as the welcome message.
+ *  - any message: the sender is a friend; "ขอแนวรับ [SYMBOL...]" is answered for every friend,
+ *    and "วิธีใช้" / "help" repeats the guide.
  *    Replies are free (they do not count toward the monthly push quota).
  */
 export async function POST(request: Request) {
@@ -41,7 +46,7 @@ export async function POST(request: Request) {
       await upsertFollower(userId);
       await syncProfile(userId);
       if (event.replyToken) {
-        await replyText(event.replyToken, WELCOME).catch((e) => console.error("welcome reply failed", e));
+        await replyText(event.replyToken, await guide(true)).catch((e) => console.error("welcome reply failed", e));
       }
     } else if (event.type === "unfollow") {
       await deactivateUser(userId);
@@ -49,8 +54,11 @@ export async function POST(request: Request) {
       const { needsProfile } = await ensureFriend(userId);
       if (needsProfile) await syncProfile(userId);
 
-      const command = event.message?.type === "text" ? parseSupportCommand(event.message.text ?? "") : null;
-      if (command && event.replyToken) {
+      const text = event.message?.type === "text" ? (event.message.text ?? "") : "";
+      const command = parseSupportCommand(text);
+      if (isHelpCommand(text) && event.replyToken) {
+        await replyText(event.replyToken, await guide(false)).catch((e) => console.error("help reply failed", e));
+      } else if (command && event.replyToken) {
         const reply = formatSupportReply(await listTrackedSymbols(), command.symbols);
         await replyText(event.replyToken, reply).catch((e) => console.error("reply failed", e));
       }
