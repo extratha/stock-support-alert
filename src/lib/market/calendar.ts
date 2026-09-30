@@ -147,8 +147,8 @@ export function lastCompletedSession(now: Date = new Date()): string {
 
 /**
  * True from `afterOpenMinutes` after the 09:30 open until `windowMinutes` later
- * (e.g. 240 / 50 -> 13:30-14:20 ET). Used to accept exactly one of the two UTC
- * cron candidates that cover EDT and EST; the window also absorbs cron delays.
+ * (e.g. 240 / 150 -> 13:30-16:00 ET). The daily check accepts runs in this window, which absorbs
+ * late cron runs; which of the two UTC candidates actually works is decided by the recorded run (job_runs).
  */
 export function isWithinWindowAfterOpen(now: Date, afterOpenMinutes: number, windowMinutes: number): boolean {
   const { date, minutes } = nyTime(now);

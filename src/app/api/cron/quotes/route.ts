@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   const params = new URL(request.url).searchParams;
   const now = new Date();
 
-  const skipped = skipReason(now, {
+  const skipped = await skipReason(now, {
     force: params.get("force") === "1",
     mode: params.get("mode") === "daily" ? "daily" : "intraday",
   });

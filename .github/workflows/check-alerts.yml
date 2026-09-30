@@ -3,8 +3,8 @@ name: Check support alerts
 # Once a day, 4 hours after the US open (13:30 America/New_York).
 # GitHub cron is UTC and ignores DST, so both candidates are scheduled:
 #   17:30 UTC = 13:30 EDT (summer)   18:30 UTC = 13:30 EST (winter)
-# The endpoints (mode=daily) only accept the run that lands in the 50 minutes starting at
-# 13:30 New York time, so exactly one of the two does the work; the other is a no-op.
+# The endpoints (mode=daily) accept a run from 13:30 New York time until the close (scheduled runs are
+# often late), and the first complete run records the day, so the other candidate is a no-op.
 #
 # Twelve Data's free plan allows 8 credits/minute, so quotes are fetched in batches of up to
 # 8 symbols with a ~1 minute pause (20 symbols ~ 2 extra minutes) before the actual check,

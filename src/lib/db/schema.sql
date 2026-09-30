@@ -142,3 +142,10 @@ create table if not exists support_tests (
   expected_held double precision,
   primary key (symbol, tier, touched_on)
 );
+
+-- Last New York trading day each once-a-day job finished, so a second (or delayed) cron run the same day is a no-op.
+create table if not exists job_runs (
+  job          text primary key,
+  last_day     date not null,
+  finished_at  timestamptz not null default now()
+);

@@ -1,0 +1,57 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const lastRunDay = vi.fn<(job: string) => Promise<string | null>>(async () => null);
+const markRun = vi.fn(async () => {});
+vi.mock("@/lib/db/jobRuns", () => ({ lastRunDay, markRun }));
+vi.mock("@/lib/db/symbols", () => ({ listSymbols: vi.fn(async () => ["NVDA"]) }));
+vi.mock("@/lib/db/supports", () => ({ listSupports: vi.fn(async () => []) }));
+vi.mock("@/lib/db/alerts", () => ({
+  loadStates: vi.fn(async () => new Map()), claimAlert: vi.fn(), releaseAlert: vi.fn(), recordAlerts: vi.fn(), rearm: vi.fn(),
+  stateKey: (s: string, t: string) => `${s}:${t}`,
+}));
+const getQuotes = vi.fn(async () => ({ prices: { NVDA: 180 } as Record<string, number>, lows: {}, prevCloses: {}, errors: {} as Record<string, string>, fetched: 1, cached: 0, remaining: 0 }));
+vi.mock("./quotes", () => ({ getQuotes }));
+vi.mock("./notify", () => ({ notify: vi.fn(), recipients: vi.fn(async () => ["U1"]) }));
+
+const { checkAlerts, skipReason } = await import("./checkAlerts");
+
+// Wednesday 30 Sep 2026, New York is on EDT (UTC-4): 13:30 ET = 17:30 UTC
+const at = (utc: string) => new Date(`2026-09-30T${utc}:00Z`);
+
+describe("once-a-day check", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    lastRunDay.mockResolvedValue(null);
+  });
+
+  it("accepts a run from 13:30 until the close, so a late GitHub schedule still checks", async () => {
+    expect(await skipReason(at("17:29"), { mode: "daily" })).toBe("outside_daily_window");
+    expect(await skipReason(at("17:30"), { mode: "daily" })).toBeUndefined();
+    expect(await skipReason(at("19:15"), { mode: "daily" })).toBeUndefined(); // 1 h 45 min late
+    expect(await skipReason(at("20:00"), { mode: "daily" })).toBe("market_closed");
+  });
+
+  it("the first complete run records the day; the other cron candidate then does nothing", async () => {
+    await checkAlerts(at("17:40"), { mode: "daily" });
+    expect(markRun).toHaveBeenCalledWith("daily-check", "2026-09-30");
+    lastRunDay.mockResolvedValue("2026-09-30");
+    expect((await checkAlerts(at("18:35"), { mode: "daily" })).skipped).toBe("already_checked_today");
+    expect(getQuotes).toHaveBeenCalledTimes(1);
+  });
+
+  it("a run with quote errors is not recorded, so the next candidate tries again", async () => {
+    getQuotes.mockResolvedValueOnce({ prices: {}, lows: {}, prevCloses: {}, errors: { NVDA: "HTTP 500" }, fetched: 0, cached: 0, remaining: 0 });
+    await checkAlerts(at("17:40"), { mode: "daily" });
+    expect(markRun).not.toHaveBeenCalled();
+  });
+
+  it("still checks when the bookkeeping table is unavailable; forced and intraday runs ignore it", async () => {
+    lastRunDay.mockRejectedValue(new Error("relation job_runs does not exist"));
+    expect(await skipReason(at("17:40"), { mode: "daily" })).toBeUndefined();
+    lastRunDay.mockResolvedValue("2026-09-30");
+    expect(await skipReason(at("17:40"), { mode: "daily", force: true })).toBeUndefined();
+    expect(await skipReason(at("17:40"), { mode: "intraday" })).toBeUndefined();
+    await checkAlerts(at("17:40"), { mode: "daily", force: true });
+    expect(markRun).not.toHaveBeenCalled();
+  });
+});

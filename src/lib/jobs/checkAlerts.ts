@@ -2,15 +2,16 @@ import { config } from "@/lib/config";
 import { formatAlertMessages, formatLateMessages, type AlertItem, type LateItem } from "@/lib/alerts/format";
 import { evaluateTier, sameScale } from "@/lib/alerts/evaluate";
 import { claimAlert, loadStates, recordAlerts, rearm, releaseAlert, stateKey } from "@/lib/db/alerts";
+import { lastRunDay, markRun } from "@/lib/db/jobRuns";
 import { listSupports } from "@/lib/db/supports";
 import { listSymbols } from "@/lib/db/symbols";
 import { formatDateTime } from "@/lib/format/datetime";
-import { isMarketOpen, isWithinWindowAfterOpen, MARKET_TZ } from "@/lib/market/calendar";
+import { isMarketOpen, isWithinWindowAfterOpen, MARKET_TZ, nyToday } from "@/lib/market/calendar";
 import { getQuotes } from "./quotes";
 import { notify, recipients } from "./notify";
 
 export interface CheckSummary {
-  skipped?: "market_closed" | "outside_daily_window" | "no_symbols";
+  skipped?: SkipReason | "no_symbols";
   checked: number;
   quotesFetched: number;
   quotesCached: number;
@@ -25,23 +26,26 @@ const timeLabel = (now: Date) => `${formatDateTime(now, MARKET_TZ)} (เวล�
 
 /**
  * "intraday" (default): run every ~30 min while the market is open, judge by current price.
- * "daily": run once, 4 hours after the open (the cron fires at 13:30 ET); only a run landing in
- *          the DAILY_WINDOW_MIN minutes from then on is accepted, and today's low counts as a touch.
+ * "daily": run once, 4 hours after the open (the cron fires at 13:30 ET), and today's low counts as a touch.
+ *          A run is accepted from 13:30 until the close: GitHub's scheduled runs are often 15-60 min late, and
+ *          a narrow window used to drop the whole day. The first run that finishes records the day, so the
+ *          other UTC cron candidate (or a late duplicate) the same day does nothing.
  */
 export type CheckMode = "intraday" | "daily";
 const DAILY_RUN_AFTER_OPEN_MIN = 4 * 60;
-const DAILY_WINDOW_MIN = 50;
+const DAILY_WINDOW_MIN = 150; // 13:30 -> 16:00
+const DAILY_JOB = "daily-check";
+
+type SkipReason = "market_closed" | "outside_daily_window" | "already_checked_today";
 
 /** Why a run should do nothing right now (shared by the quote-warming and check endpoints). */
-export function skipReason(
-  now: Date,
-  { force, mode }: { force?: boolean; mode?: CheckMode },
-): "market_closed" | "outside_daily_window" | undefined {
+export async function skipReason(now: Date, { force, mode }: { force?: boolean; mode?: CheckMode }): Promise<SkipReason | undefined> {
   if (force) return undefined;
   if (!isMarketOpen(now)) return "market_closed";
-  if (mode === "daily" && !isWithinWindowAfterOpen(now, DAILY_RUN_AFTER_OPEN_MIN, DAILY_WINDOW_MIN)) {
-    return "outside_daily_window";
-  }
+  if (mode !== "daily") return undefined;
+  if (!isWithinWindowAfterOpen(now, DAILY_RUN_AFTER_OPEN_MIN, DAILY_WINDOW_MIN)) return "outside_daily_window";
+  // if the bookkeeping is unavailable, better check twice than not at all (alerts are claimed, never sent twice)
+  if ((await lastRunDay(DAILY_JOB).catch(() => null)) === nyToday(now)) return "already_checked_today";
   return undefined;
 }
 
@@ -62,15 +66,29 @@ export async function checkAlerts(now: Date, opts: { force?: boolean; mode?: Che
   const daily = opts.mode === "daily";
   const summary: CheckSummary = { checked: 0, quotesFetched: 0, quotesCached: 0, alerts: [], rearmed: [], errors: {} };
 
-  const skipped = skipReason(now, opts);
+  const skipped = await skipReason(now, opts);
   if (skipped) return { ...summary, skipped };
 
+  const result = await runCheck(now, daily, summary);
+  // Only a complete daily run counts: if some quotes could not be fetched, the other cron candidate tries again
+  // (already-sent alerts are not repeated, their tiers are claimed).
+  if (daily && !opts.force && Object.keys(result.quoteErrors).length === 0) {
+    await markRun(DAILY_JOB, nyToday(now)).catch((e) => console.error("could not record the daily check", e));
+  }
+  return result.summary;
+}
+
+async function runCheck(now: Date, daily: boolean, summary: CheckSummary): Promise<{ summary: CheckSummary; quoteErrors: Record<string, string> }> {
+  let quoteErrors: Record<string, string> = {};
+  const out = (s: CheckSummary) => ({ summary: s, quoteErrors });
+
   const symbols = await listSymbols();
-  if (symbols.length === 0) return { ...summary, skipped: "no_symbols" };
+  if (symbols.length === 0) return out({ ...summary, skipped: "no_symbols" });
 
   const [supports, states, quotes] = await Promise.all([listSupports(), loadStates(), getQuotes(symbols, now)]);
   summary.quotesFetched = quotes.fetched;
   summary.quotesCached = quotes.cached;
+  quoteErrors = { ...quotes.errors };
   summary.errors = quotes.errors;
   summary.checked = Object.keys(quotes.prices).length;
 
@@ -108,12 +126,12 @@ export async function checkAlerts(now: Date, opts: { force?: boolean; mode?: Che
       }
     }
   }
-  if (pending.length === 0) return summary;
+  if (pending.length === 0) return out(summary);
 
   // Don't burn alerts (and re-arm state) while nobody can receive them.
   if ((await recipients()).length === 0) {
     for (const p of pending) await releaseAlert(p.item.symbol, p.item.tier, p.previousAlertAt);
-    return { ...summary, noRecipients: true };
+    return out({ ...summary, noRecipients: true });
   }
 
   try {
@@ -125,7 +143,7 @@ export async function checkAlerts(now: Date, opts: { force?: boolean; mode?: Che
 
   await recordAlerts(pending.map((p) => p.item));
   summary.alerts = pending.map((p) => `${p.item.symbol}:${p.item.tier}`);
-  return summary;
+  return out(summary);
 }
 
 /**
