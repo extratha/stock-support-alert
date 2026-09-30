@@ -73,6 +73,13 @@ NVDA แตะ "แนวรับแรก"
 • ห่างจากแนวรับ: -0.17%
 ```
 
+### สั่งดูแนวรับผ่านแชท LINE
+พิมพ์หา OA ได้เลย (ตอบด้วย reply message ฟรี ไม่กินโควตา push และอ่านจากข้อมูลที่ cache ไว้ ไม่เรียก Stock API):
+- `ขอแนวรับ` → แนวรับของ **ทุกตัวที่ track ในหน้าเว็บ**
+- `ขอแนวรับ NVDA` หรือ `ขอแนวรับ nvda amd` → เฉพาะตัวที่ระบุ (ตัวที่ไม่ได้ track จะแจ้งว่าไม่พบ)
+
+ถ้าตั้ง `LINE_ALLOWED_USER_IDS` ไว้ เฉพาะ userId ในรายการนั้นที่สั่งได้ — [`src/lib/line/supportCommand.ts`](src/lib/line/supportCommand.ts)
+
 ### ตลาดเปิด/ปิด (DST)
 GitHub cron เป็น UTC และไม่รู้จัก DST จึงตั้งให้ครอบคลุมทั้งเวลา EDT/EST แล้วให้ endpoint ตัดสินเองด้วย
 `America/New_York` ผ่าน `Intl` (ไม่ hardcode offset) รวมวันหยุด NYSE (Good Friday, Juneteenth ฯลฯ) และวัน early close 13:00

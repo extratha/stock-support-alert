@@ -1,7 +1,7 @@
 import type { Tier } from "@/lib/support/types";
 import { sql } from "./client";
 
-export const SYMBOL_PATTERN = /^[A-Z][A-Z0-9.\-]{0,9}$/;
+export { SYMBOL_PATTERN } from "@/lib/symbol";
 
 export async function listSymbols(): Promise<string[]> {
   const rows = await sql()<{ symbol: string }[]>`select symbol from symbols order by symbol`;
