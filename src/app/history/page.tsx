@@ -1,6 +1,7 @@
 import { TierBadge } from "@/components/TierBadge";
 import { listHistory } from "@/lib/db/alerts";
 import { formatDateTime } from "@/lib/format/datetime";
+import { PAGE_DATA_TIMEOUT_MS, withTimeout } from "@/lib/timeout";
 import { METHOD_LABEL, type Method } from "@/lib/support/types";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 const usd = (n: number) => `$${n.toFixed(2)}`;
 
 export default async function HistoryPage() {
-  const rows = await listHistory();
+  const rows = await withTimeout(listHistory(), PAGE_DATA_TIMEOUT_MS, "load alert history");
   return (
     <div className="space-y-4">
       <div>

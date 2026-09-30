@@ -58,7 +58,7 @@ function StockCard({ stock, live, dragging }: { stock: StockCardData; live?: Pri
   // Live price (display only) wins; otherwise the price saved by the scheduled Twelve Data check.
   const s = { ...stock, price: live?.price ?? stock.price };
   const priceLabel = live
-    ? `ราคา ณ ${live.asOf ? formatDateTime(new Date(live.asOf)) : "—"} · ${SOURCE_LABEL[live.source]}`
+    ? `ราคา ณ ${live.asOf ? formatDateTime(new Date(live.asOf)) : "—"} · ${SOURCE_LABEL[live.source]}${live.stale ? " (ค่าเก่า)" : ""}`
     : s.quoteTimeLabel
       ? `ราคา ณ ${s.quoteTimeLabel}`
       : "ยังไม่มีราคา (รอรอบเช็คถัดไป)";
@@ -147,8 +147,9 @@ function SortableCard({ stock, live }: { stock: StockCardData; live?: PriceEntry
   );
 }
 
-async function loadPrices(): Promise<Record<string, PriceEntry>> {
-  const res = await apiFetch("/api/prices");
+/** `force` = the refresh button: skip the 5-minute shared cache (the server still rate-limits per symbol). */
+async function loadPrices(force = false): Promise<Record<string, PriceEntry>> {
+  const res = await apiFetch(force ? "/api/prices?force=1" : "/api/prices");
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return ((await res.json()) as { prices: Record<string, PriceEntry> }).prices;
 }
@@ -177,7 +178,7 @@ export function SortableStocks({ initial }: { initial: StockCardData[] }) {
   async function refreshPrices() {
     setPriceState("loading");
     try {
-      setPrices(await loadPrices());
+      setPrices(await loadPrices(true));
       setPriceState("ready");
     } catch {
       setPriceState("error");

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearLiveCache, fetchLivePrice, fetchLivePrices, LIVE_CACHE_TTL_MS, parseFinnhubQuote, parseYahooChart } from "./live";
+import { fetchLivePrice, fetchLivePrices, parseFinnhubQuote, parseYahooChart } from "./live";
 
 describe("parseFinnhubQuote", () => {
   it("reads current price, previous close and last-trade time", () => {
@@ -34,7 +34,6 @@ const fail = (status = 500) => new Response("x", { status });
 
 let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
-  clearLiveCache();
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
   vi.stubEnv("FINNHUB_API_KEY", "test-key");
@@ -91,21 +90,44 @@ describe("fetchLivePrices", () => {
     expect(Object.keys(r.errors)).toEqual(["BAD"]);
   });
 
-  it("caches for 30s so repeated refreshes don't call the APIs again", async () => {
-    fetchMock.mockImplementation(async () => finnhubOk(10)); // a Response body can only be read once
-    await fetchLivePrices(["AAA", "BBB"], 1_000_000);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    await fetchLivePrices(["AAA", "BBB"], 1_000_000 + LIVE_CACHE_TTL_MS - 1);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    await fetchLivePrices(["AAA", "BBB"], 1_000_000 + LIVE_CACHE_TTL_MS + 1);
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+  it("returns within the overall deadline even if every source hangs, reporting the unfinished symbols", async () => {
+    // A fetch that never answers on its own: it only ends when the AbortSignal it was given fires.
+    fetchMock.mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => init.signal?.addEventListener("abort", () => reject(new Error("aborted")))),
+    );
+    const started = Date.now();
+    const symbols = Array.from({ length: 25 }, (_, i) => `S${i}`);
+    const r = await fetchLivePrices(symbols, { deadlineMs: 150 });
+    expect(Date.now() - started).toBeLessThan(2000); // nowhere near "hang forever"
+    expect(Object.keys(r.prices)).toHaveLength(0);
+    expect(Object.keys(r.errors).sort()).toEqual([...symbols].sort());
+    expect(Object.values(r.errors).some((e) => e.includes("deadline"))).toBe(true);
   });
 
-  it("does not cache failures", async () => {
-    fetchMock.mockImplementation(async () => fail(500));
-    await fetchLivePrices(["AAA"], 5);
-    const calls = fetchMock.mock.calls.length;
-    await fetchLivePrices(["AAA"], 6);
-    expect(fetchMock.mock.calls.length).toBeGreaterThan(calls);
+  it("keeps what finished before the deadline and does not start new symbols after it", async () => {
+    fetchMock.mockImplementation((url: string, init: RequestInit) => {
+      const fast = String(url).includes("symbol=FAST");
+      if (fast) return Promise.resolve(finnhubOk(42));
+      return new Promise((_r, reject) => init.signal?.addEventListener("abort", () => reject(new Error("aborted"))));
+    });
+    const r = await fetchLivePrices(["FAST", "SLOW"], { deadlineMs: 150 });
+    expect(r.prices.FAST).toMatchObject({ price: 42, source: "finnhub" });
+    expect(r.errors.SLOW).toBeDefined();
+    expect(r.prices.SLOW).toBeUndefined();
   });
+
+  it("moves on to the next source when one is slow: Finnhub times out, Yahoo answers", async () => {
+    fetchMock.mockImplementation((url: string, init: RequestInit) => {
+      if (String(url).includes("finnhub")) {
+        return new Promise((_r, reject) => init.signal?.addEventListener("abort", () => reject(new Error("timed out"))));
+      }
+      return Promise.resolve(yahooOk(77));
+    });
+    const started = Date.now();
+    const r = await fetchLivePrice("NVDA");
+    expect(r.price).toMatchObject({ price: 77, source: "yahoo" });
+    expect(Date.now() - started).toBeLessThan(6000); // SOURCE_TIMEOUT_MS (4 s) + a little, never unbounded
+  }, 10_000);
 });
+

@@ -2,12 +2,13 @@ import Link from "next/link";
 import { SortableStocks, type StockCardData } from "@/components/SortableStocks";
 import { listTrackedSymbols } from "@/lib/db/symbols";
 import { formatDateTime } from "@/lib/format/datetime";
+import { PAGE_DATA_TIMEOUT_MS, withTimeout } from "@/lib/timeout";
 
 export const dynamic = "force-dynamic";
 
 
 export default async function DashboardPage() {
-  const stocks = await listTrackedSymbols();
+  const stocks = await withTimeout(listTrackedSymbols(), PAGE_DATA_TIMEOUT_MS, "load tracked symbols");
 
   if (stocks.length === 0) {
     return (

@@ -78,3 +78,15 @@ begin
     update line_users set notify = active;
   end if;
 end $$;
+
+-- Shared cache of the live prices shown on the dashboard (Finnhub / Yahoo). Display only: alerts and
+-- support levels never read this table (they use `quotes`, filled by the scheduled Twelve Data check).
+create table if not exists live_quotes (
+  symbol          text primary key references symbols(symbol) on delete cascade,
+  price           numeric(14, 4) not null,
+  previous_close  numeric(14, 4),
+  as_of           timestamptz,
+  source          text not null,
+  fetched_at      timestamptz not null default now()
+);
+

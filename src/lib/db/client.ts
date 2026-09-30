@@ -27,6 +27,7 @@ const OPTIONS = {
   max_pipeline: 0,
   max: 3,
   idle_timeout: 20,
+  connect_timeout: 10, // postgres.js default is 30 s; a page must never wait that long for a connection
 };
 
 export function sql(): Sql {

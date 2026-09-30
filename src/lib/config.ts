@@ -14,6 +14,12 @@ const num = (name: string, fallback: number) => {
 export const config = {
   /** How many symbols may be tracked. Larger lists are fetched in rate-limited batches. */
   maxTrackedSymbols: () => num("MAX_TRACKED_SYMBOLS", 20),
+  /** Live dashboard prices are shared through the DB and reused for this long (protects the free API limits). */
+  livePriceTtlSeconds: () => Math.max(0, num("LIVE_PRICE_TTL_SECONDS", 300)),
+  /** The "รีเฟรชราคา" button can bypass the cache, but never more often than this per symbol. */
+  livePriceMinRefreshSeconds: () => Math.max(0, num("LIVE_PRICE_MIN_REFRESH_SECONDS", 30)),
+  /** Hard ceiling for one live-price request, all symbols and all sources together (page budget is 15 s). */
+  livePriceDeadlineMs: () => Math.max(1000, num("LIVE_PRICE_DEADLINE_MS", 12_000)),
   /**
    * Twelve Data free plan: 8 API credits/minute, one credit per symbol per request.
    * Every job fetches at most this many symbols per call; the workflow loops with a

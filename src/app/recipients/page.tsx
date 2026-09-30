@@ -2,11 +2,12 @@ import { RecipientsManager, type RecipientRow } from "@/components/RecipientsMan
 import { config } from "@/lib/config";
 import { listUsers } from "@/lib/db/lineUsers";
 import { formatDateTime } from "@/lib/format/datetime";
+import { PAGE_DATA_TIMEOUT_MS, withTimeout } from "@/lib/timeout";
 
 export const dynamic = "force-dynamic";
 
 export default async function RecipientsPage() {
-  const users = await listUsers();
+  const users = await withTimeout(listUsers(), PAGE_DATA_TIMEOUT_MS, "load LINE friends");
   // Plain, pre-formatted data only (no Dates) crosses into the client component.
   const rows: RecipientRow[] = users.map((u) => ({
     userId: u.userId,
