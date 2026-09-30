@@ -19,6 +19,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useState } from "react";
 import { DEFAULT_RULES } from "@/lib/alerts/evaluate";
+import { formatDateString } from "@/lib/format/datetime";
 import { METHOD_LABEL, type Method, type Tier } from "@/lib/support/types";
 import { GripIcon } from "./icons";
 import { Spinner } from "./Spinner";
@@ -94,7 +95,7 @@ function StockCard({ stock, dragging }: { stock: StockCardData; dragging?: boole
       )}
       {s.asOf && !dragging && (
         <p className="mt-3 text-xs text-muted">
-          คำนวณจากข้อมูลถึง {s.asOf} (close <span className="font-mono">{usd(s.refClose ?? 0)}</span>)
+          คำนวณจากข้อมูลถึง {formatDateString(s.asOf)} (close <span className="font-mono">{usd(s.refClose ?? 0)}</span>)
         </p>
       )}
     </>

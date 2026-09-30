@@ -3,6 +3,7 @@ import { evaluateTier } from "@/lib/alerts/evaluate";
 import { claimAlert, loadStates, recordAlerts, rearm, releaseAlert, stateKey } from "@/lib/db/alerts";
 import { listSupports } from "@/lib/db/supports";
 import { listSymbols } from "@/lib/db/symbols";
+import { formatDateTime } from "@/lib/format/datetime";
 import { isMarketOpen, isWithinWindowAfterOpen, MARKET_TZ } from "@/lib/market/calendar";
 import { getQuotes } from "./quotes";
 import { notify, recipients } from "./notify";
@@ -19,12 +20,7 @@ export interface CheckSummary {
   noRecipients?: boolean;
 }
 
-const timeLabel = (now: Date) =>
-  new Intl.DateTimeFormat("th-TH", {
-    timeZone: MARKET_TZ,
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(now) + " (เวลานิวยอร์ก)";
+const timeLabel = (now: Date) => `${formatDateTime(now, MARKET_TZ)} (เวลานิวยอร์ก)`;
 
 /**
  * "intraday" (default): run every ~30 min while the market is open, judge by current price.

@@ -1,4 +1,5 @@
 import { METHOD_LABEL, TIER_LABEL_TH, type Method, type Tier } from "@/lib/support/types";
+import { formatDateTime } from "@/lib/format/datetime";
 import { SYMBOL_PATTERN } from "@/lib/symbol";
 import { packBlocks } from "./text";
 
@@ -32,8 +33,6 @@ export interface StockSnapshot {
 }
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
-const stamp = (d: Date) =>
-  new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "short", timeStyle: "short" }).format(d);
 
 /** Reply built purely from cached data (no external API calls); split into several messages if long. */
 export function formatSupportReply(all: StockSnapshot[], requested: string[]): string[] {
@@ -51,7 +50,7 @@ export function formatSupportReply(all: StockSnapshot[], requested: string[]): s
       continue;
     }
     const head = s.price !== null
-      ? `${s.symbol} — ${usd(s.price)}${s.quoteTime ? ` (ราคา ณ ${stamp(s.quoteTime)})` : ""}`
+      ? `${s.symbol} — ${usd(s.price)}${s.quoteTime ? ` (ราคา ณ ${formatDateTime(s.quoteTime)})` : ""}`
       : `${s.symbol} — ยังไม่มีราคา`;
     const lines = s.levels.length === 0
       ? ["• ยังไม่มีแนวรับ"]

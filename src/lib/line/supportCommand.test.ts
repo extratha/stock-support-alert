@@ -54,4 +54,12 @@ describe("formatSupportReply", () => {
     const all = messages.join("\n");
     for (const s of many) expect(all).toContain(s.symbol);
   });
+
+  it("shows the quote time as DD/MM/YYYY HH:mm:ss (Gregorian year)", () => {
+    const t = formatSupportReply(
+      [{ symbol: "NVDA", price: 200, quoteTime: new Date("2026-09-29T13:30:05Z"), levels: [] }],
+      [],
+    ).join("\n");
+    expect(t).toContain("ราคา ณ 29/09/2026 20:30:05");
+  });
 });

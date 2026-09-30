@@ -1,12 +1,11 @@
 import { TierBadge } from "@/components/TierBadge";
 import { listHistory } from "@/lib/db/alerts";
+import { formatDateTime } from "@/lib/format/datetime";
 import { METHOD_LABEL, type Method } from "@/lib/support/types";
 
 export const dynamic = "force-dynamic";
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
-const time = (d: Date) =>
-  new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "medium", timeStyle: "short" }).format(d);
 
 export default async function HistoryPage() {
   const rows = await listHistory();
@@ -33,7 +32,7 @@ export default async function HistoryPage() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id} className="border-t border-border transition-colors duration-150 hover:bg-elevated/60">
-                  <td className="whitespace-nowrap px-4 py-3 text-muted">{time(r.sentAt)}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-muted">{formatDateTime(r.sentAt)}</td>
                   <td className="px-4 py-3 font-mono font-semibold">{r.symbol}</td>
                   <td className="px-4 py-3"><TierBadge tier={r.tier} /></td>
                   <td className="px-4 py-3 font-mono tabular-nums">{usd(r.price)}</td>

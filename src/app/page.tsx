@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { SortableStocks, type StockCardData } from "@/components/SortableStocks";
 import { listTrackedSymbols } from "@/lib/db/symbols";
+import { formatDateTime } from "@/lib/format/datetime";
 
 export const dynamic = "force-dynamic";
 
-const time = (d: Date) =>
-  new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "short", timeStyle: "short" }).format(d);
 
 export default async function DashboardPage() {
   const stocks = await listTrackedSymbols();
@@ -28,7 +27,7 @@ export default async function DashboardPage() {
   const cards: StockCardData[] = stocks.map((s) => ({
     symbol: s.symbol,
     price: s.price,
-    quoteTimeLabel: s.quoteTime ? time(s.quoteTime) : null,
+    quoteTimeLabel: s.quoteTime ? formatDateTime(s.quoteTime) : null,
     asOf: s.asOf,
     refClose: s.refClose,
     levels: s.levels,
