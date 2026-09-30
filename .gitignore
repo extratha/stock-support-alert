@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# backtest: downloaded price history (re-downloadable)
+/.backtest-cache/
+/docs/backtest-events.csv
