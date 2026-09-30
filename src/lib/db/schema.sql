@@ -26,6 +26,9 @@ create table if not exists quotes (
   fetched_at  timestamptz not null default now()
 );
 
+-- Added later: today's low, used by the once-a-day check to catch intraday touches.
+alter table quotes add column if not exists day_low numeric(14, 4);
+
 -- Re-arm state machine per (symbol, tier). See src/lib/alerts/evaluate.ts.
 create table if not exists alert_state (
   symbol         text not null references symbols(symbol) on delete cascade,

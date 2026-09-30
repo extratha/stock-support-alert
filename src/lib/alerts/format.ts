@@ -6,6 +6,8 @@ export interface AlertItem {
   method: Method;
   price: number;
   level: number;
+  /** Set in once-a-day mode: the day's low, which may be what actually touched the level. */
+  dayLow?: number;
 }
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
@@ -20,6 +22,7 @@ export function formatAlertMessage(items: AlertItem[], timeLabel: string): strin
       `• ราคาปัจจุบัน: ${usd(a.price)}`,
       `• แนวรับ: ${usd(a.level)} (${METHOD_LABEL[a.method]})`,
       `• ห่างจากแนวรับ: ${diffText}`,
+      ...(a.dayLow !== undefined ? [`• ต่ำสุดวันนี้: ${usd(a.dayLow)}`] : []),
     ].join("\n");
   });
   return [`🔔 แจ้งเตือนแนวรับหุ้น US`, "", blocks.join("\n\n"), "", `เวลา ${timeLabel}`].join("\n");

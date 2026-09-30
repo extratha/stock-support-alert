@@ -33,4 +33,9 @@ describe("evaluateTier", () => {
     const state = { armed: true, lastAlertAt: minutesAgo(10) };
     expect(evaluateTier({ price: 99, level, state, now })).toBe("none");
   });
+
+  it("counts an earlier intraday touch when the day's low is supplied", () => {
+    expect(evaluateTier({ price: 104, level, state: undefined, now })).toBe("none");
+    expect(evaluateTier({ price: 104, level, state: undefined, now, low: 99.5 })).toBe("alert");
+  });
 });

@@ -4,6 +4,8 @@ export interface Quote {
   symbol: string;
   price: number;
   previousClose: number | null;
+  /** Lowest price of the current trading day so far (null if the provider omits it). */
+  dayLow: number | null;
   /** Time of the last trade as reported by the provider. */
   quoteTime: Date;
 }

@@ -80,6 +80,13 @@ NVDA แตะ "แนวรับแรก"
 
 ถ้าตั้ง `LINE_ALLOWED_USER_IDS` ไว้ เฉพาะ userId ในรายการนั้นที่สั่งได้ — [`src/lib/line/supportCommand.ts`](src/lib/line/supportCommand.ts)
 
+### โหมดเช็ควันละครั้ง (ค่าเริ่มต้นของ workflow)
+เพื่อประหยัดโควตา workflow เรียก `/api/cron/check?mode=daily` **วันละครั้งประมาณ 15:30 น. นิวยอร์ก (6 ชม. หลังตลาดเปิด, เหลือ 30 นาทีก่อนปิด)**
+ยังมีเวลาตัดสินใจซื้อทัน โหมดนี้ต่างจากโหมดถี่ตรงที่ **นับ "ราคาต่ำสุดของวัน" เป็นการแตะด้วย** (ไม่งั้นถ้าแตะตอนเช้าแล้วเด้งกลับจะพลาด) และข้อความแจ้งเตือนจะมีบรรทัด "ต่ำสุดวันนี้"
+- วัน early close (13:00 น. นิวยอร์ก เช่นวันหลัง Thanksgiving) จะไม่มีรอบเช็ค เพราะ cron ตั้งไว้หลังเวลานั้น
+- อยากกลับไปเช็คทุก 30 นาที: ใช้ cron `*/30 13-20 * * 1-5` + `0 21 * * 1-5` และเรียก `/api/cron/check` (ไม่ใส่ `mode`) — endpoint รองรับทั้งสองโหมด
+- Supabase Free จะ pause project ถ้าไม่มี activity ~7 วัน การรันวันละครั้งวันทำการยังนับเป็น activity แต่หยุดยาวหลายวันควรระวัง
+
 ### ตลาดเปิด/ปิด (DST)
 GitHub cron เป็น UTC และไม่รู้จัก DST จึงตั้งให้ครอบคลุมทั้งเวลา EDT/EST แล้วให้ endpoint ตัดสินเองด้วย
 `America/New_York` ผ่าน `Intl` (ไม่ hardcode offset) รวมวันหยุด NYSE (Good Friday, Juneteenth ฯลฯ) และวัน early close 13:00
@@ -96,7 +103,7 @@ GitHub cron เป็น UTC และไม่รู้จัก DST จึง�
 | Yahoo (unofficial) | ✅ | ✅ | ไม่มี SLA, มักบล็อก IP ของ Vercel/GitHub, ไม่มี key |
 
 **ออกแบบให้ประหยัด rate limit**
-- พอร์ต 5 ตัว = `/quote` 1 คำขอ (5 credits) ต่อรอบ × ~14 รอบ/วัน ≈ 70 credits/วัน จาก 800
+- พอร์ต 5 ตัว = `/quote` 1 คำขอ (5 credits) ต่อรอบ — โหมดวันละครั้ง ≈ 5 credits/วัน (โหมดทุก 30 นาที ≈ 70/วัน) จาก 800
 - ราคาที่ query แล้ว cache ในตาราง `quotes` (TTL 5 นาที) — รันซ้ำ/กดเรียกมือไม่ยิง API ซ้ำ
 - แนวรับ cache ในตาราง `support_levels` และคำนวณใหม่วันละครั้ง (ข้ามถ้าข้อมูลของ session ล่าสุดมีอยู่แล้ว)
 - หน้าเว็บอ่านจาก cache ล้วน ๆ ไม่เรียก API
@@ -173,7 +180,7 @@ gh secret set CRON_SECRET --repo extratha/stock-support-alert
 
 | Workflow | เวลา (UTC) | ทำอะไร |
 |---|---|---|
-| [`check-alerts.yml`](.github/workflows/check-alerts.yml) | ทุก 30 นาที 13:00–21:00 จันทร์–ศุกร์ | เช็คราคา เทียบแนวรับ ส่ง LINE (endpoint ข้ามเองถ้าตลาดปิด) |
+| [`check-alerts.yml`](.github/workflows/check-alerts.yml) | 19:30 และ 20:30 จันทร์–ศุกร์ (= 15:30 น. นิวยอร์ก ทั้งช่วง EDT/EST) | เช็คราคา **วันละครั้ง** ก่อนปิดตลาด 30 นาที เทียบแนวรับ (รวมราคาต่ำสุดของวัน) ส่ง LINE — endpoint เลือกรันแค่รอบที่ตรงเวลาจริง อีกรอบข้ามเอง |
 | [`recalculate-supports.yml`](.github/workflows/recalculate-supports.yml) | 22:00 จันทร์–ศุกร์ | คำนวณแนวรับใหม่หลังตลาดปิด |
 
 ทดสอบมือ: แท็บ **Actions → เลือก workflow → Run workflow** (ติ๊ก `force` เพื่อข้ามการเช็คเวลาตลาด)

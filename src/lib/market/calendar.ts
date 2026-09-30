@@ -144,3 +144,11 @@ export function lastCompletedSession(now: Date = new Date()): string {
   while (!isTradingDay(cursor)) cursor = addDays(cursor, -1);
   return cursor;
 }
+
+/** True during the last `minutes` of the regular session (close is 13:00 on early-close days). */
+export function isWithinLastMinutesOfSession(now: Date, minutes: number): boolean {
+  const { date, minutes: m } = nyTime(now);
+  if (!isTradingDay(date)) return false;
+  const close = sessionCloseMinutes(date);
+  return m >= close - minutes && m < close;
+}

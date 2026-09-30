@@ -31,7 +31,14 @@ export type Decision = "alert" | "rearm" | "none";
  * A missing state row means "armed".
  */
 export function evaluateTier(
-  input: { price: number; level: number; state: TierState | undefined; now: Date },
+  input: {
+    price: number;
+    level: number;
+    state: TierState | undefined;
+    now: Date;
+    /** Today's low; when given, a touch earlier in the day counts (once-a-day mode). */
+    low?: number;
+  },
   rules: AlertRules = DEFAULT_RULES,
 ): Decision {
   const { price, level, now } = input;
@@ -41,7 +48,7 @@ export function evaluateTier(
     return price > level * (1 + rules.rearmBuffer) ? "rearm" : "none";
   }
 
-  const touched = price <= level * (1 + rules.touchTolerance);
+  const touched = Math.min(price, input.low ?? price) <= level * (1 + rules.touchTolerance);
   if (!touched) return "none";
 
   if (state.lastAlertAt) {

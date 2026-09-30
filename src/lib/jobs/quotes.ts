@@ -4,6 +4,8 @@ import { stockProvider } from "@/lib/stock";
 
 export interface QuoteLookup {
   prices: Record<string, number>;
+  /** Today's low per symbol (only where the provider supplied it). */
+  lows: Record<string, number>;
   errors: Record<string, string>;
   fetched: number;
   cached: number;
@@ -18,10 +20,12 @@ export async function getQuotes(symbols: string[], now: Date): Promise<QuoteLook
   const cachedRows = await listCachedQuotes(symbols);
 
   const prices: Record<string, number> = {};
+  const lows: Record<string, number> = {};
   const fresh = new Set<string>();
   for (const q of cachedRows) {
     if (now.getTime() - q.fetchedAt.getTime() < ttlMs) {
       prices[q.symbol] = q.price;
+      if (q.dayLow !== null) lows[q.symbol] = q.dayLow;
       fresh.add(q.symbol);
     }
   }
@@ -31,9 +35,12 @@ export async function getQuotes(symbols: string[], now: Date): Promise<QuoteLook
   if (stale.length > 0) {
     const result = await stockProvider.getQuotes(stale);
     await upsertQuotes(Object.values(result.data));
-    for (const q of Object.values(result.data)) prices[q.symbol] = q.price;
+    for (const q of Object.values(result.data)) {
+      prices[q.symbol] = q.price;
+      if (q.dayLow !== null) lows[q.symbol] = q.dayLow;
+    }
     Object.assign(errors, result.errors);
   }
 
-  return { prices, errors, fetched: stale.length, cached: fresh.size };
+  return { prices, lows, errors, fetched: stale.length, cached: fresh.size };
 }

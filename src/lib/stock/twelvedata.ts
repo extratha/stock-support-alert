@@ -53,11 +53,13 @@ export function parseQuotes(json: Json, symbols: string[]): BatchResult<Quote> {
       continue;
     }
     const prev = Number(entry.previous_close);
+    const low = entry.low === undefined || entry.low === null || entry.low === "" ? NaN : Number(entry.low);
     const ts = Number(entry.timestamp);
     result.data[symbol] = {
       symbol,
       price,
       previousClose: Number.isFinite(prev) ? prev : null,
+      dayLow: Number.isFinite(low) ? low : null,
       quoteTime: Number.isFinite(ts) && ts > 0 ? new Date(ts * 1000) : new Date(),
     };
   }

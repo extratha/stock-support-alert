@@ -26,9 +26,10 @@ describe("parseTimeSeries", () => {
 
 describe("parseQuotes", () => {
   it("reads price, previous close and trade time", () => {
-    const r = parseQuotes({ symbol: "NVDA", close: "178.20", previous_close: "176", timestamp: 1790000000 }, ["NVDA"]);
+    const r = parseQuotes({ symbol: "NVDA", close: "178.20", low: "175.50", previous_close: "176", timestamp: 1790000000 }, ["NVDA"]);
     expect(r.data.NVDA.price).toBe(178.2);
     expect(r.data.NVDA.previousClose).toBe(176);
+    expect(r.data.NVDA.dayLow).toBe(175.5);
     expect(r.data.NVDA.quoteTime.getTime()).toBe(1790000000 * 1000);
   });
 });

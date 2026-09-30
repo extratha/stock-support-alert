@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isMarketOpen, isTradingDay, lastCompletedSession, sessionCloseMinutes } from "./calendar";
+import { isMarketOpen, isTradingDay, isWithinLastMinutesOfSession, lastCompletedSession, sessionCloseMinutes } from "./calendar";
 
 const at = (iso: string) => new Date(iso);
 
@@ -55,5 +55,20 @@ describe("lastCompletedSession", () => {
   it("skips weekends and holidays", () => {
     expect(lastCompletedSession(at("2026-09-08T13:00:00Z"))).toBe("2026-09-04"); // Tue after Labor Day, pre-market
     expect(lastCompletedSession(at("2026-10-04T15:00:00Z"))).toBe("2026-10-02"); // Sunday
+  });
+});
+
+describe("isWithinLastMinutesOfSession (daily 15:30 ET run)", () => {
+  it("summer: only the 19:30 UTC candidate lands in the window", () => {
+    expect(isWithinLastMinutesOfSession(at("2026-07-15T19:30:00Z"), 45)).toBe(true); // 15:30 EDT
+    expect(isWithinLastMinutesOfSession(at("2026-07-15T20:30:00Z"), 45)).toBe(false); // 16:30 EDT, closed
+  });
+  it("winter: only the 20:30 UTC candidate lands in the window", () => {
+    expect(isWithinLastMinutesOfSession(at("2026-01-14T19:30:00Z"), 45)).toBe(false); // 14:30 EST
+    expect(isWithinLastMinutesOfSession(at("2026-01-14T20:30:00Z"), 45)).toBe(true); // 15:30 EST
+  });
+  it("tolerates a delayed GitHub cron but not after the close", () => {
+    expect(isWithinLastMinutesOfSession(at("2026-07-15T19:55:00Z"), 45)).toBe(true);
+    expect(isWithinLastMinutesOfSession(at("2026-07-15T20:00:00Z"), 45)).toBe(false);
   });
 });
