@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const setNotify = vi.fn();
 const setLabel = vi.fn();
+const sendEnabledNotice = vi.fn();
 vi.mock("@/lib/db/lineUsers", () => ({ setNotify, setLabel }));
+vi.mock("@/lib/jobs/notify", () => ({ sendEnabledNotice }));
 
 const USER = `U${"a".repeat(32)}`;
 const call = async (userId: string, body: unknown) => {
@@ -17,8 +19,9 @@ const call = async (userId: string, body: unknown) => {
 beforeEach(() => {
   vi.clearAllMocks();
   delete process.env.MAX_PUSH_RECIPIENTS;
-  setNotify.mockResolvedValue("ok");
+  setNotify.mockResolvedValue("enabled");
   setLabel.mockResolvedValue(true);
+  sendEnabledNotice.mockResolvedValue("sent");
 });
 
 describe("PATCH /api/line/users/[userId]", () => {
@@ -32,7 +35,7 @@ describe("PATCH /api/line/users/[userId]", () => {
 
   it("enables push with the configured cap (default 5) and reports success", async () => {
     const r = await call(USER, { notify: true });
-    expect(r).toEqual({ status: 200, body: { ok: true } });
+    expect(r.status).toBe(200);
     expect(setNotify).toHaveBeenCalledWith(USER, true, 5);
   });
 
@@ -63,5 +66,29 @@ describe("PATCH /api/line/users/[userId]", () => {
     expect(setLabel).toHaveBeenLastCalledWith(USER, null);
     const tooLong = await call(USER, { label: "x".repeat(41) });
     expect(tooLong.status).toBe(400);
+  });
+});
+
+describe("the LINE notice when push is switched ON", () => {
+  it("is sent only on an off -> on change, and reported in the response", async () => {
+    const r = await call(USER, { notify: true });
+    expect(sendEnabledNotice).toHaveBeenCalledWith(USER);
+    expect(r.body).toEqual({ ok: true, notice: "sent" });
+  });
+
+  it("is not sent when nothing changed, when turning off, or when the request is refused", async () => {
+    for (const result of ["unchanged", "disabled", "limit", "inactive", "not_found"]) {
+      setNotify.mockResolvedValue(result);
+      await call(USER, { notify: result !== "disabled" });
+    }
+    await call(USER, { label: "just a label" });
+    expect(sendEnabledNotice).not.toHaveBeenCalled();
+  });
+
+  it("does not fail the request when the notice could not be delivered", async () => {
+    sendEnabledNotice.mockResolvedValue("failed");
+    const r = await call(USER, { notify: true });
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ ok: true, notice: "failed" });
   });
 });

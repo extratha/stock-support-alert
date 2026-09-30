@@ -61,22 +61,42 @@ function LabelField({ user, disabled, onSave }: { user: RecipientRow; disabled: 
   );
 }
 
+interface ApiBody {
+  error?: string;
+  notice?: "sent" | "skipped" | "failed";
+}
+type Message = { kind: "ok" | "warn" | "error"; text: string };
+
+const MESSAGE_STYLE: Record<Message["kind"], string> = { ok: "text-success", warn: "text-warning", error: "text-danger" };
+
+/** What to tell the owner after switching alerts ON (the server also pushes a notice to the user). */
+function enabledMessage({ notice }: ApiBody): Message {
+  if (notice === "sent") return { kind: "ok", text: "เปิดการแจ้งเตือนแล้ว และส่งข้อความแจ้งผู้รับทาง LINE แล้ว" };
+  if (notice === "skipped") {
+    return { kind: "ok", text: "เปิดการแจ้งเตือนแล้ว (เพิ่งแจ้งผู้รับไปภายใน 24 ชั่วโมง จึงไม่ส่งข้อความซ้ำ)" };
+  }
+  if (notice === "failed") {
+    return { kind: "warn", text: "เปิดการแจ้งเตือนแล้ว แต่ส่งข้อความแจ้งผู้รับไม่สำเร็จ (โควตา push ของ LINE อาจเต็ม)" };
+  }
+  return { kind: "ok", text: "เปิดการแจ้งเตือนแล้ว" };
+}
+
 export function RecipientsManager({ users, max }: { users: RecipientRow[]; max: number }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null); // userId being updated, or "refresh"
-  const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<Message | null>(null);
 
   const enabled = users.filter((u) => u.active && u.notify).length;
   const full = enabled >= max;
 
-  async function request(key: string, url: string, init: RequestInit, okText: string) {
+  async function request(key: string, url: string, init: RequestInit, ok: string | ((body: ApiBody) => Message)) {
     setBusy(key);
     setMessage(null);
     try {
       const res = await apiFetch(url, init);
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      const body = (await res.json().catch(() => ({}))) as ApiBody;
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-      setMessage({ kind: "ok", text: okText });
+      setMessage(typeof ok === "string" ? { kind: "ok", text: ok } : ok(body));
       router.refresh();
     } catch (err) {
       setMessage({ kind: "error", text: err instanceof Error ? err.message : "เกิดข้อผิดพลาด" });
@@ -85,12 +105,12 @@ export function RecipientsManager({ users, max }: { users: RecipientRow[]; max: 
     }
   }
 
-  const patch = (userId: string, payload: { notify?: boolean; label?: string }, okText: string) =>
+  const patch = (userId: string, payload: { notify?: boolean; label?: string }, ok: string | ((body: ApiBody) => Message)) =>
     request(
       userId,
       `/api/line/users/${userId}`,
       { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
-      okText,
+      ok,
     );
 
   return (
@@ -115,7 +135,7 @@ export function RecipientsManager({ users, max }: { users: RecipientRow[]; max: 
       </div>
 
       <div aria-live="polite" className="min-h-5">
-        {message && <p className={`text-sm ${message.kind === "ok" ? "text-success" : "text-danger"}`}>{message.text}</p>}
+        {message && <p className={`text-sm ${MESSAGE_STYLE[message.kind]}`}>{message.text}</p>}
       </div>
 
       {users.length === 0 ? (
@@ -162,7 +182,7 @@ export function RecipientsManager({ users, max }: { users: RecipientRow[]; max: 
                     aria-label={`รับแจ้งเตือนของ ${name}`}
                     disabled={busy !== null || cannotEnable}
                     title={!u.active ? "เลิกเป็นเพื่อนแล้ว" : cannotEnable ? `ครบ ${max} คนแล้ว` : undefined}
-                    onClick={() => patch(u.userId, { notify: !u.notify }, u.notify ? "ปิดการแจ้งเตือนแล้ว" : "เปิดการแจ้งเตือนแล้ว")}
+                    onClick={() => patch(u.userId, { notify: !u.notify }, u.notify ? "ปิดการแจ้งเตือนแล้ว" : enabledMessage)}
                     className={`relative h-7 w-12 shrink-0 cursor-pointer rounded-full ring-1 transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
                       u.notify ? "bg-primary/90 ring-primary" : "bg-elevated ring-border"
                     }`}
@@ -183,6 +203,7 @@ export function RecipientsManager({ users, max }: { users: RecipientRow[]; max: 
       )}
 
       <p className="text-xs text-muted">
+        เมื่อเปิดรับแจ้งเตือน ระบบจะส่งข้อความแจ้งผู้รับทาง LINE 1 ข้อความ (นับโควตา push) ไม่เกิน 1 ครั้งต่อคนต่อ 24 ชั่วโมง<br />
         หมายเหตุ: LINE ไม่เปิดเผย LINE ID (เช่น extratha) ให้ระบบ จึงแสดงได้แค่ชื่อที่ตั้งใน LINE และรูปโปรไฟล์ — ใช้ช่อง &quot;ชื่อเรียก&quot; ใส่เองเพื่อให้จำง่าย
       </p>
     </div>

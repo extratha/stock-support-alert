@@ -65,6 +65,8 @@ create table if not exists line_users (
 alter table line_users add column if not exists display_name text;
 alter table line_users add column if not exists picture_url text;
 alter table line_users add column if not exists label text;
+-- When the "push is now ON for you" notice was last sent (rate-limits it to protect the push quota).
+alter table line_users add column if not exists notice_sent_at timestamptz;
 do $$
 begin
   if not exists (

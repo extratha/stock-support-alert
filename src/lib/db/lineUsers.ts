@@ -61,26 +61,49 @@ export async function setLabel(userId: string, label: string | null): Promise<bo
   return rows.length > 0;
 }
 
-export type SetNotifyResult = "ok" | "limit" | "inactive" | "not_found";
+export type SetNotifyResult = "enabled" | "disabled" | "unchanged" | "limit" | "inactive" | "not_found";
 
 /**
- * Turn push on/off for one user. Enabling is one atomic statement that re-checks the cap,
- * so two quick clicks can never push the number of recipients past `max`.
+ * Turn push on/off for one user and report what actually changed ("enabled" only on an
+ * off -> on transition, which is when the owner wants to tell the user). Enabling re-checks the
+ * cap inside the same transaction as the update, so two quick clicks can never push the number
+ * of recipients past `max`.
  */
 export async function setNotify(userId: string, on: boolean, max: number): Promise<SetNotifyResult> {
-  if (!on) {
-    const rows = await sql()`update line_users set notify = false where user_id = ${userId} returning user_id`;
-    return rows.length > 0 ? "ok" : "not_found";
-  }
+  return sql().begin(async (tx) => {
+    const [user] = await tx<{ active: boolean; notify: boolean }[]>`
+      select active, notify from line_users where user_id = ${userId} for update`;
+    if (!user) return "not_found";
+    if (user.notify === on) return "unchanged";
+    if (!on) {
+      await tx`update line_users set notify = false where user_id = ${userId}`;
+      return "disabled";
+    }
+    if (!user.active) return "inactive";
+    const [{ count }] = await tx<{ count: number }[]>`
+      select count(*)::int as count from line_users where notify and active and user_id <> ${userId}`;
+    if (count >= max) return "limit";
+    await tx`update line_users set notify = true where user_id = ${userId}`;
+    return "enabled";
+  });
+}
+
+/**
+ * Atomically claim the right to send the "push is ON" notice: true only if none was sent to
+ * this user within the last `cooldownHours`. Protects the monthly push quota from on/off toggling.
+ */
+export async function claimNotice(userId: string, cooldownHours: number): Promise<boolean> {
   const rows = await sql()`
-    update line_users set notify = true
+    update line_users set notice_sent_at = now()
     where user_id = ${userId} and active
-      and (select count(*) from line_users where notify and active and user_id <> ${userId}) < ${max}
+      and (notice_sent_at is null or notice_sent_at < now() - make_interval(hours => ${cooldownHours}))
     returning user_id`;
-  if (rows.length > 0) return "ok";
-  const [user] = await sql()<{ active: boolean }[]>`select active from line_users where user_id = ${userId}`;
-  if (!user) return "not_found";
-  return user.active ? "limit" : "inactive";
+  return rows.length > 0;
+}
+
+/** The notice could not be delivered: forget the claim so a later attempt may send it. */
+export async function releaseNotice(userId: string) {
+  await sql()`update line_users set notice_sent_at = null where user_id = ${userId}`;
 }
 
 /** Who actually gets push alerts. `limit` is a second line of defence for the quota. */

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { config } from "@/lib/config";
 import { setLabel, setNotify } from "@/lib/db/lineUsers";
+import { sendEnabledNotice, type NoticeResult } from "@/lib/jobs/notify";
 import { LINE_USER_ID_PATTERN, MAX_LABEL_LENGTH } from "@/lib/line/userId";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +9,8 @@ export const dynamic = "force-dynamic";
 /**
  * Update one LINE friend from the "ผู้รับแจ้งเตือน" page (behind ADMIN_PASSWORD via proxy.ts).
  * Body: { notify?: boolean, label?: string | null }
+ * Switching push ON (off -> on) also sends that user a one-off notice via LINE push
+ * (rate-limited, costs 1 message of push quota); the response says what happened: `notice`.
  */
 export async function PATCH(request: Request, ctx: { params: Promise<{ userId: string }> }) {
   const { userId } = await ctx.params;
@@ -32,6 +35,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ userId: s
     if (!(await setLabel(userId, trimmed || null))) return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
+  let notice: NoticeResult | undefined;
   if (body.notify !== undefined) {
     const max = config.maxPushRecipients();
     const result = await setNotify(userId, body.notify, max);
@@ -45,7 +49,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ userId: s
       return NextResponse.json({ error: "คนนี้เลิกเป็นเพื่อนแล้ว จึงเปิดรับแจ้งเตือนไม่ได้" }, { status: 409 });
     }
     if (result === "not_found") return NextResponse.json({ error: "not found" }, { status: 404 });
+    if (result === "enabled") notice = await sendEnabledNotice(userId);
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, ...(notice ? { notice } : {}) });
 }

@@ -31,3 +31,18 @@ export function formatGuide(symbols: string[], { welcome }: { welcome: boolean }
   lines.push("", 'พิมพ์ "วิธีใช้" เพื่อดูข้อความนี้อีกครั้ง', "การแจ้งเตือนอัตโนมัติเมื่อราคาแตะแนวรับ ต้องให้เจ้าของระบบเปิดรับให้ก่อน");
   return lines.join("\n");
 }
+
+/** Sent (push) when the owner switches alerts ON for someone on the "ผู้รับแจ้งเตือน" page. */
+export function formatNotifyEnabledNotice(symbols: string[]): string {
+  const lines = [
+    "🔔 เปิดรับแจ้งเตือนให้บัญชีนี้แล้ว",
+    "",
+    "บัญชีของคุณจะได้รับข้อความจาก LINE นี้ เมื่อราคาหุ้นที่กำหนดไว้ในระบบเข้าแนวรับ โดยระบบเช็กราคาตามเวลาตลาดหุ้น US",
+  ];
+  if (symbols.length > 0) {
+    lines.push("", `หุ้นที่ติดตามอยู่: ${symbols.slice(0, MAX_LISTED).join(", ")}${symbols.length > MAX_LISTED ? " …" : ""}`);
+  }
+  lines.push("", 'ดูแนวรับตอนนี้ได้เลย พิมพ์ "ขอแนวรับ" (หรือ "วิธีใช้" เพื่อดูคำสั่งทั้งหมด)');
+  return lines.join("\n");
+}
+

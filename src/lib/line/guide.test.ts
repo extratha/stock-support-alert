@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatGuide, isHelpCommand } from "./guide";
+import { formatGuide, formatNotifyEnabledNotice, isHelpCommand } from "./guide";
 import { parseSupportCommand } from "./supportCommand";
 
 describe("formatGuide", () => {
@@ -42,5 +42,19 @@ describe("isHelpCommand", () => {
   it("recognises the help words (case/space-insensitive) but not normal chat", () => {
     for (const w of ["วิธีใช้", " วิธีใช้ ", "HELP", "help", "ช่วยเหลือ", "เมนู", "?"]) expect(isHelpCommand(w)).toBe(true);
     for (const w of ["สวัสดี", "ขอแนวรับ", "helpme", "วิธีใช้งานยังไง"]) expect(isHelpCommand(w)).toBe(false);
+  });
+});
+
+describe("formatNotifyEnabledNotice", () => {
+  it("tells the user they will be alerted when tracked stocks reach support, and how to look now", () => {
+    const text = formatNotifyEnabledNotice(["AMD", "NVDA"]);
+    expect(text).toContain("เปิดรับแจ้งเตือน");
+    expect(text).toContain("เข้าแนวรับ");
+    expect(text).toContain("เวลาตลาดหุ้น US");
+    expect(text).toContain("หุ้นที่ติดตามอยู่: AMD, NVDA");
+    expect(text).toContain('"ขอแนวรับ"');
+  });
+  it("omits the stock list when none are tracked", () => {
+    expect(formatNotifyEnabledNotice([])).not.toContain("หุ้นที่ติดตามอยู่");
   });
 });
