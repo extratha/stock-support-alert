@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Candle } from "@/lib/support/types";
-import { describeProfile, type ProfileData } from "./describe";
+import { describeProfile, profileText, type ProfileData } from "./describe";
 import { parseMetric, parseNextEarnings } from "./finnhub";
 import { historyStats } from "./history";
 
@@ -174,5 +174,20 @@ describe("describeProfile: plain-language meaning", () => {
       .flatMap((v) => v.lines.map((l) => l.meaning))
       .join(" ");
     for (const word of ["ควรซื้อ", "ควรขาย", "น่าซื้อ", "ราคาถูก", "พื้นฐานดี"]) expect(all).not.toContain(word);
+  });
+});
+
+describe("profileText", () => {
+  it("renders the section as standalone plain text: symbol, price, date, every line, caution marks and the footnote", () => {
+    const v = view({ beta: 2.2 });
+    const text = profileText("NVDA", 227.21, "2026-09-30", v);
+    expect(text.split("\n")[0]).toContain("NVDA");
+    expect(text).toContain("$227.21");
+    for (const l of v.lines) {
+      expect(text).toContain(`${l.label}: ${l.value}`);
+      expect(text).toContain(l.meaning);
+    }
+    expect(text).toContain("ความผันผวน (Beta): 2.2 [ควรระวัง]");
+    expect(text).toContain(v.footnote!);
   });
 });

@@ -84,3 +84,14 @@ export const EyeOffIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M17.9 17.9A10.5 10.5 0 0 1 12 19c-6.4 0-10-7-10-7a17 17 0 0 1 4.1-4.9M9.9 5.2A9.8 9.8 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-2.2 3M3 3l18 18M9.9 9.9a3 3 0 0 0 4.2 4.2" />
   </Icon>
 );
+export const CopyIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <rect x="9" y="9" width="12" height="12" rx="2" />
+    <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+  </Icon>
+);
+export const CheckIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M20 6 9 17l-5-5" />
+  </Icon>
+);

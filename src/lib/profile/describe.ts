@@ -203,3 +203,13 @@ export function describeProfile(p: ProfileData | undefined, price: number | null
   parts.push("เกณฑ์ที่ใช้แปลความหมายเป็นค่าประมาณทั่วไป ไม่ใช่คำแนะนำการลงทุน");
   return { lines, footnote: lines.length ? parts.join(" · ") : null };
 }
+
+/**
+ * The fundamentals section as plain text, for pasting into another tool (e.g. an AI chat) to analyse further.
+ * Same wording as the card, plus the symbol, price and date so the text stands on its own.
+ */
+export function profileText(symbol: string, price: number | null, today: string, view: ProfileView): string {
+  const head = `${symbol} — ข้อมูลพื้นฐานและความเสี่ยง (ณ ${formatDateString(today)}${price !== null ? `, ราคา $${price.toFixed(2)}` : ""})`;
+  const body = view.lines.map((l) => `- ${l.label}: ${l.value}${l.caution ? " [ควรระวัง]" : ""}\n  ${l.meaning}`);
+  return [head, "", ...body, ...(view.footnote ? ["", view.footnote] : [])].join("\n");
+}

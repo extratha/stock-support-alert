@@ -21,10 +21,10 @@ import { useEffect, useState, type ReactNode } from "react";
 import { DEFAULT_RULES } from "@/lib/alerts/evaluate";
 import { apiFetch } from "@/lib/apiFetch";
 import { formatDateString, formatDateTime } from "@/lib/format/datetime";
-import { describeProfile, type ProfileData } from "@/lib/profile/describe";
+import { describeProfile, profileText, type ProfileData } from "@/lib/profile/describe";
 import type { PriceEntry } from "@/lib/stock/live";
 import { METHOD_LABEL, type Method, type Tier } from "@/lib/support/types";
-import { GripIcon, RefreshIcon } from "./icons";
+import { CheckIcon, CopyIcon, GripIcon, RefreshIcon } from "./icons";
 import { Spinner } from "./Spinner";
 import { StockLogo } from "./StockLogo";
 import { TierBadge } from "./TierBadge";
@@ -59,16 +59,45 @@ const SOURCE_LABEL: Record<PriceEntry["source"], string> = {
   db: "รอบเช็กล่าสุด",
 };
 
+/** Copies the section as plain text (to paste into an AI chat for further analysis). */
+function CopyButton({ text }: { text: () => string }) {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  useEffect(() => {
+    if (state === "idle") return;
+    const t = setTimeout(() => setState("idle"), 2000);
+    return () => clearTimeout(t);
+  }, [state]);
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        // the button sits inside <summary>: don't let the click fold the section
+        e.preventDefault();
+        e.stopPropagation();
+        navigator.clipboard.writeText(text()).then(
+          () => setState("copied"),
+          () => setState("failed"),
+        );
+      }}
+      className="flex min-h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-xs font-normal text-muted transition-colors hover:bg-elevated hover:text-foreground"
+    >
+      {state === "copied" ? <CheckIcon /> : <CopyIcon />}
+      <span aria-live="polite">{state === "copied" ? "คัดลอกแล้ว" : state === "failed" ? "คัดลอกไม่ได้" : "คัดลอก"}</span>
+    </button>
+  );
+}
+
 /** Fundamentals and risk, each figure followed by what it means in plain words. */
-function ProfileSection({ profile, price, today }: { profile: ProfileData | null; price: number | null; today: string }) {
+function ProfileSection({ symbol, profile, price, today }: { symbol: string; profile: ProfileData | null; price: number | null; today: string }) {
   const view = describeProfile(profile ?? undefined, price, today);
   if (view.lines.length === 0) {
     return <p className="mt-4 text-xs text-muted">ข้อมูลพื้นฐานและความเสี่ยงจะแสดงหลังรอบอัปเดตรายวัน</p>;
   }
   return (
     <details open className="group mt-4 rounded-xl border border-border bg-background/40">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
-        <span>ข้อมูลพื้นฐานและความเสี่ยง</span>
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+        <span className="flex-1">ข้อมูลพื้นฐานและความเสี่ยง</span>
+        <CopyButton text={() => profileText(symbol, price, today, view)} />
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true" className="size-4 text-muted transition-transform duration-200 group-open:rotate-180">
           <path d="m6 9 6 6 6-6" />
         </svg>
@@ -163,7 +192,7 @@ function StockCard({
           })}
         </ul>
       )}
-      {!dragging && <ProfileSection profile={s.profile} price={s.price} today={today} />}
+      {!dragging && <ProfileSection symbol={s.symbol} profile={s.profile} price={s.price} today={today} />}
       {s.asOf && !dragging && (
         <p className="mt-3 text-xs text-muted">
           คำนวณจากข้อมูลถึง {formatDateString(s.asOf)} (close <span className="font-mono">{usd(s.refClose ?? 0)}</span>)
