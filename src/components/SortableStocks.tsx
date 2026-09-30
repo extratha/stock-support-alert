@@ -19,6 +19,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useState } from "react";
 import { DEFAULT_RULES } from "@/lib/alerts/evaluate";
+import { apiFetch } from "@/lib/apiFetch";
 import { formatDateString } from "@/lib/format/datetime";
 import { METHOD_LABEL, type Method, type Tier } from "@/lib/support/types";
 import { GripIcon } from "./icons";
@@ -154,7 +155,7 @@ export function SortableStocks({ initial }: { initial: StockCardData[] }) {
     setStocks(next); // optimistic
     setStatus({ kind: "saving", text: "กำลังบันทึกลำดับ…" });
     try {
-      const res = await fetch("/api/symbols/order", {
+      const res = await apiFetch("/api/symbols/order", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ order: next.map((s) => s.symbol) }),

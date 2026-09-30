@@ -172,9 +172,15 @@ cp .env.example .env.local
 
 ### 4. Secrets ของระบบ
 ```bash
-openssl rand -hex 32   # ใส่ผลลัพธ์เป็น CRON_SECRET
+openssl rand -hex 32   # รันสองครั้ง: ผลแรกเป็น CRON_SECRET ผลที่สองเป็น SESSION_SECRET
 ```
-ตั้ง `ADMIN_PASSWORD` เป็นรหัสผ่านที่ยาวพอ — ใช้เข้าหน้าเว็บ (HTTP Basic: username อะไรก็ได้)
+- `ADMIN_USERNAME` (ไม่ตั้ง = `admin`) และ `ADMIN_PASSWORD` (รหัสผ่านที่ยาวพอ) ใช้เข้าหน้าเว็บผ่านหน้า login
+- `SESSION_SECRET` ใช้เซ็น cookie เซสชัน (ยาวอย่างน้อย 16 ตัวอักษร) — ถ้าไม่ตั้งบน production เว็บจะตอบ 503 (ไม่เปิดโล่ง)
+
+**การ login:** เซสชันเป็น cookie ที่เซ็นลายเซ็น (HttpOnly, Secure, SameSite=Lax) อายุ 7 วัน ไม่เก็บอะไรใน DB กดปุ่ม "ออกจากระบบ" เพื่อล้าง cookie
+เปลี่ยน `ADMIN_USERNAME` / `ADMIN_PASSWORD` / `SESSION_SECRET` อย่างใดอย่างหนึ่งแล้ว Redeploy = ทุกเครื่องถูกบังคับ login ใหม่
+ข้อจำกัด: ไม่มีระบบล็อกเมื่อเดารหัสผิดหลายครั้ง (มีแค่หน่วง 0.5 วินาทีต่อครั้งที่ผิด) จึงควรตั้งรหัสให้ยาวและเดายาก
+`/api/cron/*` (bearer `CRON_SECRET`) และ `/api/line/webhook` (ลายเซ็น LINE) ไม่ผ่านหน้า login
 
 ### 5. Deploy บน Vercel (free)
 1. https://vercel.com/new → Import repo `extratha/stock-support-alert`
@@ -234,7 +240,7 @@ src/
     api/cron/*                       endpoint สำหรับ GitHub Actions
     api/line/webhook                 รับ follow/unfollow
     api/symbols                      เพิ่ม/ลบหุ้น
-  proxy.ts                           ครอบหน้าเว็บ+API ด้วย ADMIN_PASSWORD
+  proxy.ts                           ครอบหน้าเว็บ+API ด้วยเซสชัน login (cookie)
 .github/workflows/                   cron + CI
 scripts/migrate.ts                   สร้างตาราง
 ```
@@ -248,7 +254,9 @@ scripts/migrate.ts                   สร้างตาราง
 | `LINE_CHANNEL_ACCESS_TOKEN` | ✅ | ส่ง push/reply |
 | `STOCK_API_KEY` | ✅ | Twelve Data API key |
 | `DATABASE_URL` | ✅ | Postgres connection string |
+| `ADMIN_USERNAME` | – | ชื่อผู้ใช้หน้าเว็บ ค่าเริ่มต้น `admin` |
 | `ADMIN_PASSWORD` | ✅ (production) | รหัสผ่านหน้าเว็บ — ถ้าไม่ตั้งใน production เว็บจะตอบ 503 |
+| `SESSION_SECRET` | ✅ (production) | คีย์เซ็น cookie login (อย่างน้อย 16 ตัวอักษร) — ถ้าไม่ตั้งใน production เว็บจะตอบ 503 |
 | `CRON_SECRET` | ✅ | bearer token ของ `/api/cron/*` — ถ้าไม่ตั้งจะปฏิเสธทุกคำขอ |
 | `MAX_PUSH_RECIPIENTS` | – | จำนวนเพื่อนสูงสุดที่รับ push ค่าเริ่มต้น 5 (ดูหัวข้อ "ผู้รับแจ้งเตือน") |
 | `MAX_TRACKED_SYMBOLS` | – | ค่าเริ่มต้น 20 |

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { apiFetch } from "@/lib/apiFetch";
 import { PlusIcon, SendIcon, TrashIcon } from "./icons";
 import { Spinner } from "./Spinner";
 
@@ -22,7 +23,7 @@ export function SymbolManager({ initial, max, subscribers }: Props) {
     setBusy(true);
     setMessage(null);
     try {
-      const res = await fetch(url, init);
+      const res = await apiFetch(url, init);
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
       setMessage({ kind: "ok", text: okText });

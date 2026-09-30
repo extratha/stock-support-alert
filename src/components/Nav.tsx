@@ -3,7 +3,9 @@
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { ActivityIcon, HistoryIcon, ListIcon, ShieldIcon, UsersIcon } from "./icons";
+import { useState } from "react";
+import { hardNavigate } from "@/lib/hardNavigate";
+import { ActivityIcon, HistoryIcon, ListIcon, LogOutIcon, ShieldIcon, UsersIcon } from "./icons";
 import { Spinner } from "./Spinner";
 
 const links: { href: string; label: string; icon: ReactNode }[] = [
@@ -33,8 +35,31 @@ function PendingIndicator() {
   );
 }
 
+function LogoutButton() {
+  const [busy, setBusy] = useState(false);
+  async function logout() {
+    setBusy(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      hardNavigate("/login");
+    }
+  }
+  return (
+    <button
+      onClick={logout}
+      disabled={busy}
+      className="ml-auto flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-sm text-muted transition-colors duration-150 hover:bg-elevated hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {busy ? <Spinner /> : <LogOutIcon />}
+      <span>ออกจากระบบ</span>
+    </button>
+  );
+}
+
 export function Nav() {
   const pathname = usePathname();
+  if (pathname === "/login") return null; // no navigation before signing in
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur">
       <nav
@@ -69,6 +94,7 @@ export function Nav() {
             </Link>
           );
         })}
+        <LogoutButton />
       </nav>
     </header>
   );

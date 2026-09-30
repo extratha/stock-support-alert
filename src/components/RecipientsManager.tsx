@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { apiFetch } from "@/lib/apiFetch";
 import { RefreshIcon } from "./icons";
 import { Spinner } from "./Spinner";
 
@@ -72,7 +73,7 @@ export function RecipientsManager({ users, max }: { users: RecipientRow[]; max: 
     setBusy(key);
     setMessage(null);
     try {
-      const res = await fetch(url, init);
+      const res = await apiFetch(url, init);
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
       setMessage({ kind: "ok", text: okText });
