@@ -56,3 +56,9 @@ export const SendIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="m22 2-11 11M22 2l-7 20-4-9-9-4 20-7Z" />
   </Icon>
 );
+
+export const GripIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Icon strokeWidth={2.5} {...p}>
+    <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" />
+  </Icon>
+);

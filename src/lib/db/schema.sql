@@ -5,6 +5,9 @@ create table if not exists symbols (
   created_at  timestamptz not null default now()
 );
 
+-- Display order chosen by drag & drop (null = not placed yet -> sorts last, then A-Z).
+alter table symbols add column if not exists position integer;
+
 -- Cached support levels: one row per (symbol, tier), replaced by the daily recalculation.
 create table if not exists support_levels (
   symbol       text not null references symbols(symbol) on delete cascade,

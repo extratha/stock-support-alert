@@ -1,21 +1,41 @@
 import type { Tier } from "@/lib/support/types";
+import { mergeOrder } from "@/lib/symbolOrder";
 import { sql } from "./client";
 
 export { SYMBOL_PATTERN } from "@/lib/symbol";
 
+/** User-chosen order first (drag & drop), anything not placed yet after it, A-Z. */
 export async function listSymbols(): Promise<string[]> {
-  const rows = await sql()<{ symbol: string }[]>`select symbol from symbols order by symbol`;
+  const rows = await sql()<{ symbol: string }[]>`select symbol from symbols order by position nulls last, symbol`;
   return rows.map((r) => r.symbol);
 }
 
 export async function addSymbol(symbol: string): Promise<boolean> {
-  const rows = await sql()`insert into symbols (symbol) values (${symbol}) on conflict do nothing returning symbol`;
+  // New symbols go to the end of the user's ordering.
+  const rows = await sql()`
+    insert into symbols (symbol, position)
+    select ${symbol}, coalesce(max(position), -1) + 1 from symbols
+    on conflict do nothing returning symbol`;
   return rows.length > 0;
 }
 
 export async function removeSymbol(symbol: string): Promise<boolean> {
   const rows = await sql()`delete from symbols where symbol = ${symbol} returning symbol`;
   return rows.length > 0;
+}
+
+/** Persist a drag & drop ordering (see mergeOrder for how partial/stale requests are handled). */
+export async function setSymbolOrder(requested: string[]): Promise<string[]> {
+  return sql().begin(async (tx) => {
+    const current = (await tx<{ symbol: string }[]>`select symbol from symbols order by position nulls last, symbol`).map(
+      (r) => r.symbol,
+    );
+    const final = mergeOrder(current, requested);
+    for (const [position, symbol] of final.entries()) {
+      await tx`update symbols set position = ${position} where symbol = ${symbol}`;
+    }
+    return final;
+  });
 }
 
 export interface TrackedSymbol {
@@ -31,7 +51,7 @@ export interface TrackedSymbol {
 export async function listTrackedSymbols(): Promise<TrackedSymbol[]> {
   const db = sql();
   const [symbols, levels, quotes] = await Promise.all([
-    db<{ symbol: string }[]>`select symbol from symbols order by symbol`,
+    db<{ symbol: string }[]>`select symbol from symbols order by position nulls last, symbol`,
     db<{ symbol: string; tier: Tier; price: number; method: string; ref_close: number; as_of: string }[]>`
       select symbol, tier, price::float8 as price, method, ref_close::float8 as ref_close, as_of::text as as_of
       from support_levels`,
