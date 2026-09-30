@@ -6,9 +6,10 @@ import { useState, type FormEvent } from "react";
 import { apiFetch } from "@/lib/apiFetch";
 import { PlusIcon, SendIcon, TrashIcon } from "./icons";
 import { Spinner } from "./Spinner";
+import { StockLogo } from "./StockLogo";
 
 interface Props {
-  initial: string[];
+  initial: { symbol: string; logoVersion: number | null }[];
   max: number;
   subscribers: number;
 }
@@ -86,9 +87,12 @@ export function SymbolManager({ initial, max, subscribers }: Props) {
 
       <ul className="surface divide-y divide-border">
         {initial.length === 0 && <li className="p-4 text-muted">ยังไม่มีหุ้น</li>}
-        {initial.map((s) => (
+        {initial.map(({ symbol: s, logoVersion }) => (
           <li key={s} className="flex items-center justify-between px-4 py-1.5">
-            <span className="font-mono text-base font-semibold tracking-wide">{s}</span>
+            <span className="flex items-center gap-3">
+              <StockLogo symbol={s} version={logoVersion} className="size-8" />
+              <span className="font-mono text-base font-semibold tracking-wide">{s}</span>
+            </span>
             <button
               disabled={busy}
               onClick={() =>

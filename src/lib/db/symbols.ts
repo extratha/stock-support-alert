@@ -38,8 +38,25 @@ export async function setSymbolOrder(requested: string[]): Promise<string[]> {
   });
 }
 
+/** Changes whenever the stored logo does, so /api/logo/SYM?v=<it> can be cached by the browser for long. null = no logo. */
+export type LogoVersion = number | null;
+
+export interface SymbolEntry {
+  symbol: string;
+  logoVersion: LogoVersion;
+}
+
+/** Tracked symbols in display order, with whether each has a logo: database only, no third-party calls. */
+export async function listSymbolEntries(): Promise<SymbolEntry[]> {
+  return sql()<SymbolEntry[]>`
+    select symbol,
+           case when logo_type is not null then (extract(epoch from logo_checked_at) * 1000)::float8 end as "logoVersion"
+    from symbols order by position nulls last, symbol`;
+}
+
 export interface TrackedSymbol {
   symbol: string;
+  logoVersion: LogoVersion;
   price: number | null;
   quoteTime: Date | null;
   asOf: string | null;
@@ -51,7 +68,10 @@ export interface TrackedSymbol {
 export async function listTrackedSymbols(): Promise<TrackedSymbol[]> {
   const db = sql();
   const [symbols, levels, quotes] = await Promise.all([
-    db<{ symbol: string }[]>`select symbol from symbols order by position nulls last, symbol`,
+    db<{ symbol: string; logoVersion: LogoVersion }[]>`
+      select symbol,
+             case when logo_type is not null then (extract(epoch from logo_checked_at) * 1000)::float8 end as "logoVersion"
+      from symbols order by position nulls last, symbol`,
     db<{ symbol: string; tier: Tier; price: number; method: string; ref_close: number; as_of: string }[]>`
       select symbol, tier, price::float8 as price, method, ref_close::float8 as ref_close, as_of::text as as_of
       from support_levels`,
@@ -60,11 +80,12 @@ export async function listTrackedSymbols(): Promise<TrackedSymbol[]> {
   ]);
 
   const order: Record<Tier, number> = { minor: 0, intermediate: 1, major: 2 };
-  return symbols.map(({ symbol }) => {
+  return symbols.map(({ symbol, logoVersion }) => {
     const mine = levels.filter((l) => l.symbol === symbol).sort((a, b) => order[a.tier] - order[b.tier]);
     const quote = quotes.find((q) => q.symbol === symbol);
     return {
       symbol,
+      logoVersion,
       price: quote?.price ?? null,
       quoteTime: quote?.quote_time ?? null,
       asOf: mine[0]?.as_of ?? null,

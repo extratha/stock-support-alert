@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isCronAuthorized } from "@/lib/auth";
+import { backfillLogos } from "@/lib/jobs/logos";
 import { recalculateAll } from "@/lib/jobs/recalculateSupports";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,10 @@ export async function POST(request: Request) {
   const force = params.get("force") === "1";
   const offset = Number.parseInt(params.get("offset") ?? "0", 10) || 0;
   try {
-    return NextResponse.json(await recalculateAll(new Date(), { force, offset }));
+    const result = await recalculateAll(new Date(), { force, offset });
+    // Symbols still without a logo get a few attempts per run (each retried at most weekly). Never affects the result.
+    const logos = await backfillLogos({ limit: 3 }).catch(() => null);
+    return NextResponse.json({ ...result, ...(logos && (logos.saved.length > 0 || Object.keys(logos.missing).length > 0) ? { logos } : {}) });
   } catch (err) {
     console.error("recalculate failed", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "failed" }, { status: 500 });

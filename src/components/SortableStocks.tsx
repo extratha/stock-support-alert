@@ -25,11 +25,13 @@ import type { PriceEntry } from "@/lib/stock/live";
 import { METHOD_LABEL, type Method, type Tier } from "@/lib/support/types";
 import { GripIcon, RefreshIcon } from "./icons";
 import { Spinner } from "./Spinner";
+import { StockLogo } from "./StockLogo";
 import { TierBadge } from "./TierBadge";
 
 /** Plain serializable data (dates already formatted on the server). */
 export interface StockCardData {
   symbol: string;
+  logoVersion: number | null;
   price: number | null;
   quoteTimeLabel: string | null;
   asOf: string | null;
@@ -76,7 +78,10 @@ function StockCard({
   return (
     <>
       <div className="flex items-start justify-between gap-4">
-        <h2 className="font-mono text-xl font-semibold tracking-wide">{s.symbol}</h2>
+        <div className="flex min-w-0 items-center gap-3">
+          <StockLogo symbol={s.symbol} version={s.logoVersion} />
+          <h2 className="font-mono text-xl font-semibold tracking-wide">{s.symbol}</h2>
+        </div>
         <div className="flex items-start gap-1">
           <div className="text-right">
             <div className="font-mono text-xl font-medium tabular-nums">{s.price !== null ? usd(s.price) : "—"}</div>

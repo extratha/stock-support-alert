@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "db:migrate": "tsx scripts/migrate.ts",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "seed:logos": "tsx scripts/seed-logos.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

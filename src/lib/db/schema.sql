@@ -90,3 +90,10 @@ create table if not exists live_quotes (
   fetched_at      timestamptz not null default now()
 );
 
+-- Company logos, fetched once when a symbol is added (or later by the daily job / seed script) and kept here,
+-- so pages never depend on a third-party CDN. logo_type null = no logo yet (logo_checked_at = last attempt).
+alter table symbols add column if not exists logo_data bytea;
+alter table symbols add column if not exists logo_type text;
+alter table symbols add column if not exists logo_source text;
+alter table symbols add column if not exists logo_checked_at timestamptz;
+

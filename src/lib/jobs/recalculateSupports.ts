@@ -4,6 +4,7 @@ import { replaceSupports, supportAsOfBySymbol } from "@/lib/db/supports";
 import { lastCompletedSession } from "@/lib/market/calendar";
 import { stockProvider } from "@/lib/stock";
 import { computeSupports } from "@/lib/support/calculate";
+import { ensureLogo } from "./logos";
 
 /** ~1 trading year: MA200 needs 200 bars, Fibonacci scans 120. */
 const HISTORY_BARS = 260;
@@ -67,7 +68,12 @@ export async function trackSymbol(symbol: string, now: Date): Promise<{ ok: true
   const created = await addSymbol(symbol);
   try {
     const summary = await recalculate([symbol], now, { force: true });
-    if (summary.updated.includes(symbol)) return { ok: true };
+    if (summary.updated.includes(symbol)) {
+      // The logo is fetched once, now, and kept in the DB. Best effort and bounded: adding the symbol never
+      // fails or waits long because of it (the daily job fills in any that are still missing).
+      await ensureLogo(symbol, { deadlineMs: 6000 });
+      return { ok: true };
+    }
     if (created) await removeSymbol(symbol);
     return { ok: false, error: summary.errors[symbol] ?? "could not calculate support levels" };
   } catch (err) {

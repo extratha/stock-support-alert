@@ -27,6 +27,7 @@ export default async function DashboardPage() {
   // Only plain, pre-formatted data crosses into the client component (no Dates, no hydration drift).
   const cards: StockCardData[] = stocks.map((s) => ({
     symbol: s.symbol,
+    logoVersion: s.logoVersion,
     price: s.price,
     quoteTimeLabel: s.quoteTime ? formatDateTime(s.quoteTime) : null,
     asOf: s.asOf,
