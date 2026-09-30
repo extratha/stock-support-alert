@@ -12,30 +12,33 @@ export default async function HistoryPage() {
   const rows = await listHistory();
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">ประวัติการแจ้งเตือน</h1>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">ประวัติการแจ้งเตือน</h1>
+        <p className="mt-1 text-sm text-muted">{rows.length > 0 ? `ล่าสุด ${rows.length} รายการ` : "รายการที่ส่งเข้า LINE จะแสดงที่นี่"}</p>
+      </div>
       {rows.length === 0 ? (
-        <p className="text-muted">ยังไม่มีการแจ้งเตือน</p>
+        <div className="surface p-8 text-center text-muted">ยังไม่มีการแจ้งเตือน</div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border">
+        <div className="surface overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-card text-left text-muted">
+            <thead className="text-left text-xs uppercase tracking-wide text-muted">
               <tr>
-                <th className="p-3">เวลา (ไทย)</th>
-                <th className="p-3">หุ้น</th>
-                <th className="p-3">ระดับ</th>
-                <th className="p-3">ราคา</th>
-                <th className="p-3">แนวรับ</th>
+                <th className="px-4 py-3 font-medium">เวลา (ไทย)</th>
+                <th className="px-4 py-3 font-medium">หุ้น</th>
+                <th className="px-4 py-3 font-medium">ระดับ</th>
+                <th className="px-4 py-3 font-medium">ราคา</th>
+                <th className="px-4 py-3 font-medium">แนวรับ</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.id} className="border-t border-border">
-                  <td className="p-3 whitespace-nowrap">{time(r.sentAt)}</td>
-                  <td className="p-3 font-semibold">{r.symbol}</td>
-                  <td className="p-3"><TierBadge tier={r.tier} /></td>
-                  <td className="p-3 font-mono">{usd(r.price)}</td>
-                  <td className="p-3 font-mono">
-                    {usd(r.level)} <span className="text-muted">({METHOD_LABEL[r.method as Method] ?? r.method})</span>
+                <tr key={r.id} className="border-t border-border transition-colors duration-150 hover:bg-elevated/60">
+                  <td className="whitespace-nowrap px-4 py-3 text-muted">{time(r.sentAt)}</td>
+                  <td className="px-4 py-3 font-mono font-semibold">{r.symbol}</td>
+                  <td className="px-4 py-3"><TierBadge tier={r.tier} /></td>
+                  <td className="px-4 py-3 font-mono tabular-nums">{usd(r.price)}</td>
+                  <td className="px-4 py-3 font-mono tabular-nums">
+                    {usd(r.level)} <span className="font-sans text-xs text-muted">({METHOD_LABEL[r.method as Method] ?? r.method})</span>
                   </td>
                 </tr>
               ))}
