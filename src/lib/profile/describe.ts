@@ -15,7 +15,7 @@ export const toProfileData = (p: StockProfile): ProfileData => ({
  * The thresholds are common rules of thumb (stated in the UI as such), not a verdict on the stock: nothing here says
  * "buy", "cheap" or "good". `caution` only marks figures that mean more risk or a known event ahead.
  */
-export interface ProfileLine {
+interface ProfileLine {
   key: "pe" | "growth" | "margin" | "beta" | "fromHigh" | "drawdown" | "earnings";
   label: string;
   value: string;
