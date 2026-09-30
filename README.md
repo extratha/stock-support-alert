@@ -292,6 +292,7 @@ gh secret set CRON_SECRET --repo extratha/stock-support-alert
 |---|---|---|
 | [`check-alerts.yml`](.github/workflows/check-alerts.yml) | 17:30 และ 18:30 จันทร์–ศุกร์ (= 13:30 น. นิวยอร์ก ทั้งช่วง EDT/EST) | เช็คราคา **วันละครั้ง** หลังตลาดเปิด 4 ชม. เทียบแนวรับ (รวมราคาต่ำสุดของวัน) ส่ง LINE — รอบแรกที่ทำงานครบในวันนั้นบันทึกไว้ อีกรอบข้ามเอง |
 | [`recalculate-supports.yml`](.github/workflows/recalculate-supports.yml) | 22:00 จันทร์–ศุกร์ | คำนวณแนวรับใหม่หลังตลาดปิด |
+| [`maintenance.yml`](.github/workflows/maintenance.yml) | กดรันเอง | ขั้นตอนหลังอัปเดต: (1) `db:migrate` (2) คำนวณแนวรับใหม่ทุกตัวทันที (3) backtest แล้วแนบรายงานไว้กับรอบนั้น — ต้องมี secret `DATABASE_URL` และ `STOCK_API_KEY` เพิ่มจาก `APP_URL`/`CRON_SECRET` |
 
 ทดสอบมือ: แท็บ **Actions → เลือก workflow → Run workflow** (ติ๊กช่อง "Ignore the market-hours / time-window check" เพื่อข้ามการเช็คเวลาตลาด — ช่องนี้ข้ามแค่เรื่องเวลา ไม่ได้บังคับให้ส่งแจ้งเตือน)
 

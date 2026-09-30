@@ -1,0 +1,100 @@
+name: Deploy steps (migrate, recalculate, backtest)
+
+# Run by hand (Actions -> this workflow -> Run workflow) after a release that changes the schema or the support logic:
+#   1. migrate      apply src/lib/db/schema.sql (idempotent: only adds what is missing)
+#   2. recalculate  recompute every symbol's levels now with the deployed code, instead of waiting for the evening run
+#   3. backtest     replay the support logic over ~5.5 years; the report is attached to the run as an artifact
+#
+# Secrets: DATABASE_URL (1, 3), APP_URL + CRON_SECRET (2, same as the other workflows), STOCK_API_KEY (3).
+# Order matters: migrate BEFORE the new code is live (it only adds columns/tables, the old code keeps working),
+# recalculate AFTER the new code is deployed (it runs on the server). Untick what you don't need.
+on:
+  workflow_dispatch:
+    inputs:
+      migrate:
+        description: "1. Apply the database schema"
+        type: boolean
+        default: true
+      recalculate:
+        description: "2. Recalculate all support levels now (needs the new code deployed)"
+        type: boolean
+        default: true
+      backtest:
+        description: "3. Run the backtest and attach the report"
+        type: boolean
+        default: true
+
+concurrency:
+  group: maintenance
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: inputs.migrate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply schema
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run db:migrate
+
+  recalculate:
+    needs: migrate
+    if: ${{ !cancelled() && inputs.recalculate && needs.migrate.result != 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      APP_URL: ${{ secrets.APP_URL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Call /api/cron/recalculate?force=1 (batches of 8 per minute)
+        run: |
+          offset=0
+          for i in 1 2 3 4 5 6; do
+            resp=$(curl --fail-with-body -sS --retry 2 --retry-delay 10 --max-time 90 \
+              -X POST -H "Authorization: Bearer $CRON_SECRET" \
+              "${APP_URL%/}/api/cron/recalculate?force=1&offset=${offset}")
+            echo "$resp"
+            [ "$(echo "$resp" | jq -r '.remaining // 0')" = "0" ] && break
+            offset=$(echo "$resp" | jq -r '.next // 0')
+            sleep 61
+          done
+
+  backtest:
+    needs: [migrate, recalculate]
+    if: ${{ !cancelled() && inputs.backtest }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Wait for the Twelve Data per-minute limit to reset (the recalculation just used it)
+        if: needs.recalculate.result == 'success'
+        run: sleep 61
+      - name: Backtest
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          STOCK_API_KEY: ${{ secrets.STOCK_API_KEY }}
+        run: npm run backtest
+      - name: Summary
+        if: always()
+        run: '[ -f docs/backtest-report.md ] && cat docs/backtest-report.md >> "$GITHUB_STEP_SUMMARY" || true'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backtest-report
+          path: |
+            docs/backtest-report.md
+            docs/backtest-events.csv
+          if-no-files-found: ignore
