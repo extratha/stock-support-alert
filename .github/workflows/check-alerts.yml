@@ -1,14 +1,14 @@
 name: Check support alerts
 
-# Once a day, 6 hours after the US open (15:30 America/New_York, 30 min before the close).
+# Once a day, 4 hours after the US open (13:30 America/New_York).
 # GitHub cron is UTC and ignores DST, so both candidates are scheduled:
-#   19:30 UTC = 15:30 EDT (summer)   20:30 UTC = 15:30 EST (winter)
-# The endpoint (mode=daily) only accepts the run that lands in the last 45 minutes of the
-# real NYSE session, so exactly one of the two does the work; the other is a no-op.
+#   17:30 UTC = 13:30 EDT (summer)   18:30 UTC = 13:30 EST (winter)
+# The endpoint (mode=daily) only accepts the run that lands in the 50 minutes starting at
+# 13:30 New York time, so exactly one of the two does the work; the other is a no-op.
 on:
   schedule:
-    - cron: "30 19 * * 1-5"
-    - cron: "30 20 * * 1-5"
+    - cron: "30 17 * * 1-5"
+    - cron: "30 18 * * 1-5"
   workflow_dispatch:
     inputs:
       force:

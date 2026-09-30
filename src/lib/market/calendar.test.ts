@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isMarketOpen, isTradingDay, isWithinLastMinutesOfSession, lastCompletedSession, sessionCloseMinutes } from "./calendar";
+import { isMarketOpen, isTradingDay, isWithinWindowAfterOpen, lastCompletedSession, sessionCloseMinutes } from "./calendar";
 
 const at = (iso: string) => new Date(iso);
 
@@ -58,17 +58,21 @@ describe("lastCompletedSession", () => {
   });
 });
 
-describe("isWithinLastMinutesOfSession (daily 15:30 ET run)", () => {
-  it("summer: only the 19:30 UTC candidate lands in the window", () => {
-    expect(isWithinLastMinutesOfSession(at("2026-07-15T19:30:00Z"), 45)).toBe(true); // 15:30 EDT
-    expect(isWithinLastMinutesOfSession(at("2026-07-15T20:30:00Z"), 45)).toBe(false); // 16:30 EDT, closed
+describe("isWithinWindowAfterOpen (daily run, 4h after open)", () => {
+  const w = (iso: string) => isWithinWindowAfterOpen(at(iso), 240, 50);
+  it("summer (EDT): only the 17:30 UTC candidate lands in the window", () => {
+    expect(w("2026-07-15T17:30:00Z")).toBe(true); // 13:30 EDT
+    expect(w("2026-07-15T18:30:00Z")).toBe(false); // 14:30 EDT
   });
-  it("winter: only the 20:30 UTC candidate lands in the window", () => {
-    expect(isWithinLastMinutesOfSession(at("2026-01-14T19:30:00Z"), 45)).toBe(false); // 14:30 EST
-    expect(isWithinLastMinutesOfSession(at("2026-01-14T20:30:00Z"), 45)).toBe(true); // 15:30 EST
+  it("winter (EST): only the 18:30 UTC candidate lands in the window", () => {
+    expect(w("2026-01-14T17:30:00Z")).toBe(false); // 12:30 EST
+    expect(w("2026-01-14T18:30:00Z")).toBe(true); // 13:30 EST
   });
-  it("tolerates a delayed GitHub cron but not after the close", () => {
-    expect(isWithinLastMinutesOfSession(at("2026-07-15T19:55:00Z"), 45)).toBe(true);
-    expect(isWithinLastMinutesOfSession(at("2026-07-15T20:00:00Z"), 45)).toBe(false);
+  it("tolerates a delayed cron but not beyond the window", () => {
+    expect(w("2026-07-15T18:10:00Z")).toBe(true); // 14:10 EDT
+    expect(w("2026-07-15T18:20:00Z")).toBe(false); // 14:20 EDT
+  });
+  it("is false on holidays", () => {
+    expect(w("2026-07-03T17:30:00Z")).toBe(false);
   });
 });

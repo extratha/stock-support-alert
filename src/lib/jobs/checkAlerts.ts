@@ -3,7 +3,7 @@ import { evaluateTier } from "@/lib/alerts/evaluate";
 import { claimAlert, loadStates, recordAlerts, rearm, releaseAlert, stateKey } from "@/lib/db/alerts";
 import { listSupports } from "@/lib/db/supports";
 import { listSymbols } from "@/lib/db/symbols";
-import { isMarketOpen, isWithinLastMinutesOfSession, MARKET_TZ } from "@/lib/market/calendar";
+import { isMarketOpen, isWithinWindowAfterOpen, MARKET_TZ } from "@/lib/market/calendar";
 import { getQuotes } from "./quotes";
 import { notify, recipients } from "./notify";
 
@@ -28,11 +28,12 @@ const timeLabel = (now: Date) =>
 
 /**
  * "intraday" (default): run every ~30 min while the market is open, judge by current price.
- * "daily": run once shortly before the close (the cron fires at 15:30 ET); only the last
- *          DAILY_WINDOW_MIN minutes of the session are accepted, and today's low counts as a touch.
+ * "daily": run once, 4 hours after the open (the cron fires at 13:30 ET); only a run landing in
+ *          the DAILY_WINDOW_MIN minutes from then on is accepted, and today's low counts as a touch.
  */
 export type CheckMode = "intraday" | "daily";
-const DAILY_WINDOW_MIN = 45;
+const DAILY_RUN_AFTER_OPEN_MIN = 4 * 60;
+const DAILY_WINDOW_MIN = 50;
 
 /** One tick: quote every tracked symbol, compare with cached levels, push LINE alerts. */
 export async function checkAlerts(now: Date, opts: { force?: boolean; mode?: CheckMode } = {}): Promise<CheckSummary> {
@@ -41,7 +42,7 @@ export async function checkAlerts(now: Date, opts: { force?: boolean; mode?: Che
 
   if (!opts.force) {
     if (!isMarketOpen(now)) return { ...summary, skipped: "market_closed" };
-    if (daily && !isWithinLastMinutesOfSession(now, DAILY_WINDOW_MIN)) {
+    if (daily && !isWithinWindowAfterOpen(now, DAILY_RUN_AFTER_OPEN_MIN, DAILY_WINDOW_MIN)) {
       return { ...summary, skipped: "outside_daily_window" };
     }
   }

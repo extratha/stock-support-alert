@@ -145,10 +145,14 @@ export function lastCompletedSession(now: Date = new Date()): string {
   return cursor;
 }
 
-/** True during the last `minutes` of the regular session (close is 13:00 on early-close days). */
-export function isWithinLastMinutesOfSession(now: Date, minutes: number): boolean {
-  const { date, minutes: m } = nyTime(now);
+/**
+ * True from `afterOpenMinutes` after the 09:30 open until `windowMinutes` later
+ * (e.g. 240 / 50 -> 13:30-14:20 ET). Used to accept exactly one of the two UTC
+ * cron candidates that cover EDT and EST; the window also absorbs cron delays.
+ */
+export function isWithinWindowAfterOpen(now: Date, afterOpenMinutes: number, windowMinutes: number): boolean {
+  const { date, minutes } = nyTime(now);
   if (!isTradingDay(date)) return false;
-  const close = sessionCloseMinutes(date);
-  return m >= close - minutes && m < close;
+  const start = OPEN_MIN + afterOpenMinutes;
+  return minutes >= start && minutes < start + windowMinutes;
 }

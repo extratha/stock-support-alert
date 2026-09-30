@@ -8,7 +8,7 @@ export const maxDuration = 60;
 /**
  * Called by .github/workflows/check-alerts.yml. Cron runs in UTC and ignores DST,
  * so the schedule is a superset and the market-hours check lives here.
- * `?mode=daily` = once-a-day run before the close using today's low;
+ * `?mode=daily` = once-a-day run 4h after the open using today's low;
  * `?force=1` bypasses the time checks (manual testing).
  */
 export async function POST(request: Request) {
