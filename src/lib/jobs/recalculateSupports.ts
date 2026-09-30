@@ -1,3 +1,4 @@
+import { config } from "@/lib/config";
 import { addSymbol, listSymbols, removeSymbol } from "@/lib/db/symbols";
 import { replaceSupports, supportAsOfBySymbol } from "@/lib/db/supports";
 import { lastCompletedSession } from "@/lib/market/calendar";
@@ -12,23 +13,33 @@ export interface RecalcSummary {
   updated: string[];
   skipped: string[];
   errors: Record<string, string>;
+  /** Symbols still to do after this call (per-minute API limit); the caller should pause and call again. */
+  remaining: number;
+  /** Offset to pass on the next call when `force` is used. */
+  next: number;
 }
 
 /**
- * Recompute support levels for `symbols` and store them.
+ * Recompute support levels for `symbols` and store them, at most `apiCreditsPerMinute`
+ * symbols per call. Without `force`, symbols that are already current are skipped, so
+ * repeated calls converge. With `force`, `offset` walks through the list instead.
  * The still-forming current-day bar is dropped: only sessions that finished
  * (per the NYSE calendar) feed the calculation.
  */
-export async function recalculate(symbols: string[], now: Date, opts: { force?: boolean } = {}): Promise<RecalcSummary> {
+export async function recalculate(symbols: string[], now: Date, opts: { force?: boolean; offset?: number } = {}): Promise<RecalcSummary> {
   const session = lastCompletedSession(now);
-  const summary: RecalcSummary = { session, updated: [], skipped: [], errors: {} };
+  const offset = opts.force ? Math.max(0, opts.offset ?? 0) : 0;
+  const summary: RecalcSummary = { session, updated: [], skipped: [], errors: {}, remaining: 0, next: offset };
 
   const cached = opts.force ? {} : await supportAsOfBySymbol();
-  const todo = symbols.filter((s) => (cached[s] ?? "") < session);
-  summary.skipped = symbols.filter((s) => !todo.includes(s));
-  if (todo.length === 0) return summary;
+  const todo = opts.force ? symbols.slice(offset) : symbols.filter((s) => (cached[s] ?? "") < session);
+  summary.skipped = symbols.filter((s) => !opts.force && !todo.includes(s));
+  const batch = todo.slice(0, config.apiCreditsPerMinute());
+  summary.remaining = todo.length - batch.length;
+  summary.next = offset + batch.length;
+  if (batch.length === 0) return summary;
 
-  const history = await stockProvider.getDailyCandles(todo, HISTORY_BARS);
+  const history = await stockProvider.getDailyCandles(batch, HISTORY_BARS);
   Object.assign(summary.errors, history.errors);
 
   for (const [symbol, candles] of Object.entries(history.data)) {
@@ -44,7 +55,7 @@ export async function recalculate(symbols: string[], now: Date, opts: { force?: 
   return summary;
 }
 
-export async function recalculateAll(now: Date, opts: { force?: boolean } = {}): Promise<RecalcSummary> {
+export async function recalculateAll(now: Date, opts: { force?: boolean; offset?: number } = {}): Promise<RecalcSummary> {
   return recalculate(await listSymbols(), now, opts);
 }
 

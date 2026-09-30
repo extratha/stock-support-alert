@@ -1,4 +1,4 @@
-import { formatAlertMessage, type AlertItem } from "@/lib/alerts/format";
+import { formatAlertMessages, type AlertItem } from "@/lib/alerts/format";
 import { evaluateTier } from "@/lib/alerts/evaluate";
 import { claimAlert, loadStates, recordAlerts, rearm, releaseAlert, stateKey } from "@/lib/db/alerts";
 import { listSupports } from "@/lib/db/supports";
@@ -35,17 +35,26 @@ export type CheckMode = "intraday" | "daily";
 const DAILY_RUN_AFTER_OPEN_MIN = 4 * 60;
 const DAILY_WINDOW_MIN = 50;
 
+/** Why a run should do nothing right now (shared by the quote-warming and check endpoints). */
+export function skipReason(
+  now: Date,
+  { force, mode }: { force?: boolean; mode?: CheckMode },
+): "market_closed" | "outside_daily_window" | undefined {
+  if (force) return undefined;
+  if (!isMarketOpen(now)) return "market_closed";
+  if (mode === "daily" && !isWithinWindowAfterOpen(now, DAILY_RUN_AFTER_OPEN_MIN, DAILY_WINDOW_MIN)) {
+    return "outside_daily_window";
+  }
+  return undefined;
+}
+
 /** One tick: quote every tracked symbol, compare with cached levels, push LINE alerts. */
 export async function checkAlerts(now: Date, opts: { force?: boolean; mode?: CheckMode } = {}): Promise<CheckSummary> {
   const daily = opts.mode === "daily";
   const summary: CheckSummary = { checked: 0, quotesFetched: 0, quotesCached: 0, alerts: [], rearmed: [], errors: {} };
 
-  if (!opts.force) {
-    if (!isMarketOpen(now)) return { ...summary, skipped: "market_closed" };
-    if (daily && !isWithinWindowAfterOpen(now, DAILY_RUN_AFTER_OPEN_MIN, DAILY_WINDOW_MIN)) {
-      return { ...summary, skipped: "outside_daily_window" };
-    }
-  }
+  const skipped = skipReason(now, opts);
+  if (skipped) return { ...summary, skipped };
 
   const symbols = await listSymbols();
   if (symbols.length === 0) return { ...summary, skipped: "no_symbols" };
@@ -92,7 +101,7 @@ export async function checkAlerts(now: Date, opts: { force?: boolean; mode?: Che
   }
 
   try {
-    await notify(formatAlertMessage(pending.map((p) => p.item), timeLabel(now)));
+    await notify(formatAlertMessages(pending.map((p) => p.item), timeLabel(now)));
   } catch (err) {
     for (const p of pending) await releaseAlert(p.item.symbol, p.item.tier, p.previousAlertAt);
     throw err;

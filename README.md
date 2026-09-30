@@ -108,7 +108,13 @@ GitHub cron เป็น UTC และไม่รู้จัก DST จึง�
 - ราคาที่ query แล้ว cache ในตาราง `quotes` (TTL 5 นาที) — รันซ้ำ/กดเรียกมือไม่ยิง API ซ้ำ
 - แนวรับ cache ในตาราง `support_levels` และคำนวณใหม่วันละครั้ง (ข้ามถ้าข้อมูลของ session ล่าสุดมีอยู่แล้ว)
 - หน้าเว็บอ่านจาก cache ล้วน ๆ ไม่เรียก API
-- จำกัดจำนวนหุ้นที่ track = 8 (ปรับด้วย `MAX_TRACKED_SYMBOLS`) ให้อยู่ใน 8 credits/นาที
+- **รองรับ 20 ตัว** (`MAX_TRACKED_SYMBOLS`, ค่าเริ่มต้น 20) ภายใต้ limit 8 credits/นาที โดยแต่ละงานดึงครั้งละไม่เกิน 8 ตัว (`API_CREDITS_PER_MINUTE`)
+  แล้ว **workflow วนเรียกซ้ำโดยเว้น 61 วินาที** จนครบ — 20 ตัว = 3 ชุด ใช้เวลาเพิ่มราว 2 นาทีต่อรอบ (ทำเป็นหลายการเรียกสั้น ๆ เพื่อไม่ชนเพดาน 60 วินาทีของ Vercel ฟรี)
+  - เช็คราคา: `/api/cron/quotes` อุ่น cache ทีละชุด แล้ว `/api/cron/check` อ่านจาก cache ทั้งหมด (ไม่เรียก API)
+  - คำนวณแนวรับ: `/api/cron/recalculate` ทำทีละชุดและตอบ `remaining` กลับมา
+  - ถ้าบางชุดล้มเหลว ตัวที่ยังไม่ได้ราคาจะถูกข้ามในรอบนั้น (ไม่ทำให้ทั้งรอบพัง)
+  - เพิ่มหุ้นผ่านหน้าเว็บรัว ๆ เกิน 8 ตัวใน 1 นาทีจะชน limit (ขึ้น error) — เว้นสักนาทีแล้วเพิ่มต่อ
+- ข้อความ LINE ที่ยาวเกิน 4,500 ตัวอักษรจะแบ่งเป็นหลายข้อความอัตโนมัติ (สูงสุด 5 ข้อความ/ครั้ง)
 - เปลี่ยน provider ได้โดย implement interface `StockDataProvider` ([`src/lib/stock/types.ts`](src/lib/stock/types.ts))
 
 > เช็ค limit ล่าสุดของ free plan ที่ https://twelvedata.com/pricing
@@ -184,7 +190,7 @@ gh secret set CRON_SECRET --repo extratha/stock-support-alert
 | [`check-alerts.yml`](.github/workflows/check-alerts.yml) | 17:30 และ 18:30 จันทร์–ศุกร์ (= 13:30 น. นิวยอร์ก ทั้งช่วง EDT/EST) | เช็คราคา **วันละครั้ง** หลังตลาดเปิด 4 ชม. เทียบแนวรับ (รวมราคาต่ำสุดของวัน) ส่ง LINE — endpoint เลือกรันแค่รอบที่ตรงเวลาจริง อีกรอบข้ามเอง |
 | [`recalculate-supports.yml`](.github/workflows/recalculate-supports.yml) | 22:00 จันทร์–ศุกร์ | คำนวณแนวรับใหม่หลังตลาดปิด |
 
-ทดสอบมือ: แท็บ **Actions → เลือก workflow → Run workflow** (ติ๊ก `force` เพื่อข้ามการเช็คเวลาตลาด)
+ทดสอบมือ: แท็บ **Actions → เลือก workflow → Run workflow** (ติ๊กช่อง "Ignore the market-hours / time-window check" เพื่อข้ามการเช็คเวลาตลาด — ช่องนี้ข้ามแค่เรื่องเวลา ไม่ได้บังคับให้ส่งแจ้งเตือน)
 
 > หมายเหตุ GitHub: cron อาจล่าช้าได้หลายนาทีช่วงคนใช้เยอะ · และ workflow ตามเวลาจะถูกปิดอัตโนมัติถ้า repo ไม่มี activity 60 วัน (เข้าไปกด enable ใหม่ได้)
 
@@ -234,7 +240,8 @@ scripts/migrate.ts                   สร้างตาราง
 | `ADMIN_PASSWORD` | ✅ (production) | รหัสผ่านหน้าเว็บ — ถ้าไม่ตั้งใน production เว็บจะตอบ 503 |
 | `CRON_SECRET` | ✅ | bearer token ของ `/api/cron/*` — ถ้าไม่ตั้งจะปฏิเสธทุกคำขอ |
 | `LINE_ALLOWED_USER_IDS` | – | จำกัดผู้รับ (คั่นด้วย `,`) |
-| `MAX_TRACKED_SYMBOLS` | – | ค่าเริ่มต้น 8 |
+| `MAX_TRACKED_SYMBOLS` | – | ค่าเริ่มต้น 20 |
+| `API_CREDITS_PER_MINUTE` | – | จำนวนหุ้นต่อการเรียก API หนึ่งครั้ง ค่าเริ่มต้น 8 (ตาม free plan ของ Twelve Data) |
 | `QUOTE_CACHE_TTL_MINUTES` | – | ค่าเริ่มต้น 5 |
 
 ## Push ขึ้น GitHub

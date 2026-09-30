@@ -1,4 +1,5 @@
 import { requireEnv } from "@/lib/config";
+import { LINE_MAX_MESSAGES } from "./text";
 
 const API = "https://api.line.me/v2/bot/message";
 const MULTICAST_LIMIT = 500;
@@ -15,17 +16,17 @@ async function post(path: string, body: unknown) {
   if (!res.ok) throw new Error(`LINE API ${path} failed: ${res.status} ${await res.text()}`);
 }
 
-/** Push one text message to many users (multicast = 1 request per 500 users). */
-export async function pushText(userIds: string[], text: string) {
+const toMessages = (texts: string | string[]) =>
+  [texts].flat().slice(0, LINE_MAX_MESSAGES).map((text) => ({ type: "text", text }));
+
+/** Push text message(s) to many users (multicast = 1 request per 500 users). */
+export async function pushText(userIds: string[], texts: string | string[]) {
   for (let i = 0; i < userIds.length; i += MULTICAST_LIMIT) {
-    await post("multicast", {
-      to: userIds.slice(i, i + MULTICAST_LIMIT),
-      messages: [{ type: "text", text }],
-    });
+    await post("multicast", { to: userIds.slice(i, i + MULTICAST_LIMIT), messages: toMessages(texts) });
   }
 }
 
 /** Reply messages are free and don't count toward the monthly push quota. */
-export async function replyText(replyToken: string, text: string) {
-  await post("reply", { replyToken, messages: [{ type: "text", text }] });
+export async function replyText(replyToken: string, texts: string | string[]) {
+  await post("reply", { replyToken, messages: toMessages(texts) });
 }

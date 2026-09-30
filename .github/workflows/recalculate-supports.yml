@@ -1,6 +1,8 @@
 name: Recalculate support levels
 
 # 22:00 UTC = 18:00 EDT / 17:00 EST: always after the 16:00 New York close.
+# The endpoint handles at most 8 symbols per call (Twelve Data free plan: 8 credits/minute)
+# and reports how many are left; this job pauses ~1 minute between calls until none are.
 on:
   schedule:
     - cron: "0 22 * * 1-5"
@@ -18,14 +20,21 @@ concurrency:
 jobs:
   recalculate:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
+    env:
+      APP_URL: ${{ secrets.APP_URL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      FORCE: ${{ inputs.force && '&force=1' || '' }}
     steps:
-      - name: Call /api/cron/recalculate
-        env:
-          APP_URL: ${{ secrets.APP_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          FORCE: ${{ inputs.force && '?force=1' || '' }}
+      - name: Call /api/cron/recalculate (batches of 8 per minute)
         run: |
-          curl --fail-with-body -sS --retry 2 --retry-delay 10 --max-time 90 \
-            -X POST -H "Authorization: Bearer $CRON_SECRET" \
-            "${APP_URL%/}/api/cron/recalculate${FORCE}"
+          offset=0
+          for i in 1 2 3 4 5 6; do
+            resp=$(curl --fail-with-body -sS --retry 2 --retry-delay 10 --max-time 90 \
+              -X POST -H "Authorization: Bearer $CRON_SECRET" \
+              "${APP_URL%/}/api/cron/recalculate?offset=${offset}${FORCE}")
+            echo "$resp"
+            [ "$(echo "$resp" | jq -r '.remaining // 0')" = "0" ] && break
+            offset=$(echo "$resp" | jq -r '.next // 0')
+            sleep 61
+          done

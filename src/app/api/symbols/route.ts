@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   if (existing.includes(symbol)) return NextResponse.json({ error: `${symbol} ถูก track อยู่แล้ว` }, { status: 409 });
   if (existing.length >= config.maxTrackedSymbols()) {
     return NextResponse.json(
-      { error: `track ได้สูงสุด ${config.maxTrackedSymbols()} ตัว (จำกัดตาม rate limit ของ API ฟรี)` },
+      { error: `track ได้สูงสุด ${config.maxTrackedSymbols()} ตัว (ปรับได้ด้วย MAX_TRACKED_SYMBOLS)` },
       { status: 400 },
     );
   }

@@ -5,12 +5,18 @@ import { recalculateAll } from "@/lib/jobs/recalculateSupports";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-/** Daily, after the US close (see .github/workflows/recalculate.yml). `?force=1` ignores the freshness check. */
+/**
+ * Daily, after the US close (see .github/workflows/recalculate-supports.yml).
+ * Handles at most API_CREDITS_PER_MINUTE symbols per call and reports `remaining`;
+ * the workflow pauses and calls again. `?force=1` recomputes everything (walk it with `offset`).
+ */
 export async function POST(request: Request) {
   if (!isCronAuthorized(request)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const force = new URL(request.url).searchParams.get("force") === "1";
+  const params = new URL(request.url).searchParams;
+  const force = params.get("force") === "1";
+  const offset = Number.parseInt(params.get("offset") ?? "0", 10) || 0;
   try {
-    return NextResponse.json(await recalculateAll(new Date(), { force }));
+    return NextResponse.json(await recalculateAll(new Date(), { force, offset }));
   } catch (err) {
     console.error("recalculate failed", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "failed" }, { status: 500 });

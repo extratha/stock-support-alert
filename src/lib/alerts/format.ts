@@ -1,3 +1,4 @@
+import { packBlocks } from "@/lib/line/text";
 import { METHOD_LABEL, TIER_LABEL_TH, type Method, type Tier } from "@/lib/support/types";
 
 export interface AlertItem {
@@ -12,8 +13,11 @@ export interface AlertItem {
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
 
-/** Thai LINE text for one or more alerts triggered in the same run (one message saves push quota). */
-export function formatAlertMessage(items: AlertItem[], timeLabel: string): string {
+/**
+ * Thai LINE text for the alerts triggered in one run. Everything goes into a single
+ * message when it fits (saves push quota); only very large batches spill into more.
+ */
+export function formatAlertMessages(items: AlertItem[], timeLabel: string): string[] {
   const blocks = items.map((a) => {
     const diff = ((a.price - a.level) / a.level) * 100;
     const diffText = `${diff >= 0 ? "+" : ""}${diff.toFixed(2)}%`;
@@ -25,5 +29,5 @@ export function formatAlertMessage(items: AlertItem[], timeLabel: string): strin
       ...(a.dayLow !== undefined ? [`• ต่ำสุดวันนี้: ${usd(a.dayLow)}`] : []),
     ].join("\n");
   });
-  return [`🔔 แจ้งเตือนแนวรับหุ้น US`, "", blocks.join("\n\n"), "", `เวลา ${timeLabel}`].join("\n");
+  return packBlocks(blocks, { header: `🔔 แจ้งเตือนแนวรับหุ้น US · ${timeLabel}\n` });
 }

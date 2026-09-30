@@ -1,5 +1,6 @@
 import { METHOD_LABEL, TIER_LABEL_TH, type Method, type Tier } from "@/lib/support/types";
 import { SYMBOL_PATTERN } from "@/lib/symbol";
+import { packBlocks } from "./text";
 
 export interface SupportCommand {
   /** Upper-cased tickers the user asked for; empty means "everything I track". */
@@ -34,9 +35,9 @@ const usd = (n: number) => `$${n.toFixed(2)}`;
 const stamp = (d: Date) =>
   new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "short", timeStyle: "short" }).format(d);
 
-/** Reply text built purely from cached data (no external API calls). */
-export function formatSupportReply(all: StockSnapshot[], requested: string[]): string {
-  if (all.length === 0) return "ยังไม่มีหุ้นที่ track — เพิ่มได้ที่หน้าเว็บ (จัดการหุ้น)";
+/** Reply built purely from cached data (no external API calls); split into several messages if long. */
+export function formatSupportReply(all: StockSnapshot[], requested: string[]): string[] {
+  if (all.length === 0) return ["ยังไม่มีหุ้นที่ track — เพิ่มได้ที่หน้าเว็บ (จัดการหุ้น)"];
 
   const bySymbol = new Map(all.map((s) => [s.symbol, s]));
   const wanted = requested.length > 0 ? requested : all.map((s) => s.symbol);
@@ -62,5 +63,5 @@ export function formatSupportReply(all: StockSnapshot[], requested: string[]): s
   }
 
   if (unknown.length > 0) blocks.push(`ไม่พบในรายการที่ track: ${unknown.join(", ")}`);
-  return ["📊 แนวรับปัจจุบัน", "", blocks.join("\n\n")].join("\n");
+  return packBlocks(blocks, { header: "📊 แนวรับปัจจุบัน\n" });
 }

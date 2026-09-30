@@ -9,11 +9,14 @@ export interface QuoteLookup {
   errors: Record<string, string>;
   fetched: number;
   cached: number;
+  /** Stale symbols not fetched this call because of the per-minute API limit. */
+  remaining: number;
 }
 
 /**
  * Cache-first quote lookup: only symbols whose cached quote is older than the
- * TTL hit the API, in a single batched request.
+ * TTL hit the API, in a single request of at most `apiCreditsPerMinute` symbols.
+ * The rest are reported in `remaining`/`errors` so the caller can come back after a pause.
  */
 export async function getQuotes(symbols: string[], now: Date): Promise<QuoteLookup> {
   const ttlMs = config.quoteCacheTtlMinutes() * 60_000;
@@ -30,8 +33,11 @@ export async function getQuotes(symbols: string[], now: Date): Promise<QuoteLook
     }
   }
 
-  const stale = symbols.filter((s) => !fresh.has(s));
+  const allStale = symbols.filter((s) => !fresh.has(s));
+  const stale = allStale.slice(0, config.apiCreditsPerMinute());
+  const deferred = allStale.slice(stale.length);
   const errors: Record<string, string> = {};
+  for (const s of deferred) errors[s] = "deferred: per-minute API limit";
   if (stale.length > 0) {
     const result = await stockProvider.getQuotes(stale);
     await upsertQuotes(Object.values(result.data));
@@ -42,5 +48,5 @@ export async function getQuotes(symbols: string[], now: Date): Promise<QuoteLook
     Object.assign(errors, result.errors);
   }
 
-  return { prices, lows, errors, fetched: stale.length, cached: fresh.size };
+  return { prices, lows, errors, fetched: stale.length, cached: fresh.size, remaining: deferred.length };
 }
