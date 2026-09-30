@@ -3,7 +3,8 @@ name: Deploy steps (migrate, recalculate, backtest)
 # Run by hand (Actions -> this workflow -> Run workflow) after a release that changes the schema or the support logic:
 #   1. migrate      apply src/lib/db/schema.sql (idempotent: only adds what is missing)
 #   2. recalculate  recompute every symbol's levels now with the deployed code, instead of waiting for the evening run
-#   3. backtest     replay the support logic over ~5.5 years; the report is attached to the run as an artifact
+#   3. backtest     replay the support logic over ~5.5 years; the report is committed to docs/backtest-report.md,
+#                   shown in the run summary, and attached to the run (with the per-event CSV) as an artifact
 #
 # Secrets: DATABASE_URL (1, 3), APP_URL + CRON_SECRET (2, same as the other workflows), STOCK_API_KEY (3).
 # Order matters: migrate BEFORE the new code is live (it only adds columns/tables, the old code keeps working),
@@ -34,8 +35,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -72,9 +73,11 @@ jobs:
     if: ${{ !cancelled() && inputs.backtest }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: write # commits the refreshed docs/backtest-report.md
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -87,11 +90,20 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           STOCK_API_KEY: ${{ secrets.STOCK_API_KEY }}
         run: npm run backtest
+      - name: Save the report in the repository (docs/backtest-report.md)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/backtest-report.md
+          if git diff --cached --quiet; then echo "report unchanged"; exit 0; fi
+          git commit -m "Backtest report $(date -u +%F)"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
       - name: Summary
         if: always()
         # also printed to the log, which can be read where artifacts can't be downloaded
         run: '[ -f docs/backtest-report.md ] && tee -a "$GITHUB_STEP_SUMMARY" < docs/backtest-report.md || true'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: backtest-report
