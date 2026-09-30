@@ -81,7 +81,17 @@ function enabledMessage({ notice }: ApiBody): Message {
   return { kind: "ok", text: "เปิดการแจ้งเตือนแล้ว" };
 }
 
-export function RecipientsManager({ users, max }: { users: RecipientRow[]; max: number }) {
+export function RecipientsManager({ users: serverUsers, max }: { users: RecipientRow[]; max: number }) {
+  // Local copy of the list so a switch moves the instant it is clicked (optimistic update),
+  // instead of waiting for the server round-trip + page refresh. It is replaced by fresh
+  // server data whenever that arrives ("adjust state while rendering" pattern).
+  const [seenServerUsers, setSeenServerUsers] = useState(serverUsers);
+  const [users, setUsers] = useState(serverUsers);
+  if (serverUsers !== seenServerUsers) {
+    setSeenServerUsers(serverUsers);
+    setUsers(serverUsers);
+  }
+
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null); // userId being updated, or "refresh"
   const [message, setMessage] = useState<Message | null>(null);
@@ -89,7 +99,7 @@ export function RecipientsManager({ users, max }: { users: RecipientRow[]; max: 
   const enabled = users.filter((u) => u.active && u.notify).length;
   const full = enabled >= max;
 
-  async function request(key: string, url: string, init: RequestInit, ok: string | ((body: ApiBody) => Message)) {
+  async function request(key: string, url: string, init: RequestInit, ok: string | ((body: ApiBody) => Message)): Promise<boolean> {
     setBusy(key);
     setMessage(null);
     try {
@@ -97,9 +107,11 @@ export function RecipientsManager({ users, max }: { users: RecipientRow[]; max: 
       const body = (await res.json().catch(() => ({}))) as ApiBody;
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
       setMessage(typeof ok === "string" ? { kind: "ok", text: ok } : ok(body));
-      router.refresh();
+      router.refresh(); // sync with the server in the background; the UI is already up to date
+      return true;
     } catch (err) {
       setMessage({ kind: "error", text: err instanceof Error ? err.message : "เกิดข้อผิดพลาด" });
+      return false;
     } finally {
       setBusy(null);
     }
@@ -112,6 +124,16 @@ export function RecipientsManager({ users, max }: { users: RecipientRow[]; max: 
       { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
       ok,
     );
+
+  /** Flip the switch immediately; put it back if the server refuses (cap reached, friend left, network). */
+  async function toggle(u: RecipientRow) {
+    const next = !u.notify;
+    const setNotify = (value: boolean) =>
+      setUsers((list) => list.map((x) => (x.userId === u.userId ? { ...x, notify: value } : x)));
+    setNotify(next);
+    const ok = await patch(u.userId, { notify: next }, next ? enabledMessage : "ปิดการแจ้งเตือนแล้ว");
+    if (!ok) setNotify(u.notify);
+  }
 
   return (
     <div className="space-y-4">
@@ -182,7 +204,7 @@ export function RecipientsManager({ users, max }: { users: RecipientRow[]; max: 
                     aria-label={`รับแจ้งเตือนของ ${name}`}
                     disabled={busy !== null || cannotEnable}
                     title={!u.active ? "เลิกเป็นเพื่อนแล้ว" : cannotEnable ? `ครบ ${max} คนแล้ว` : undefined}
-                    onClick={() => patch(u.userId, { notify: !u.notify }, u.notify ? "ปิดการแจ้งเตือนแล้ว" : enabledMessage)}
+                    onClick={() => toggle(u)}
                     className={`relative h-7 w-12 shrink-0 cursor-pointer rounded-full ring-1 transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
                       u.notify ? "bg-primary/90 ring-primary" : "bg-elevated ring-border"
                     }`}
