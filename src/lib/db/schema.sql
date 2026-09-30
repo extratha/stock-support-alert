@@ -97,3 +97,27 @@ alter table symbols add column if not exists logo_type text;
 alter table symbols add column if not exists logo_source text;
 alter table symbols add column if not exists logo_checked_at timestamptz;
 
+-- Fundamentals + risk shown under each card. Price-history stats come from the daily recalculation (Twelve Data),
+-- fundamentals from Finnhub once a day. Display only: never used for alerts.
+create table if not exists stock_profiles (
+  symbol              text primary key references symbols(symbol) on delete cascade,
+  -- from our own price history
+  last_close          numeric(14, 4),
+  high_52w            numeric(14, 4),
+  max_drawdown        double precision,  -- e.g. -0.66 = fell 66% from a previous peak
+  drawdown_peak_date  date,
+  drawdown_trough_date date,
+  drawdown_recovered  boolean,           -- did the price later close above that peak again?
+  history_from        date,
+  history_at          timestamptz,
+  -- from Finnhub
+  pe                  double precision,
+  forward_pe          double precision,
+  revenue_growth      double precision,  -- percent, year over year (83.4 = +83.4%)
+  net_margin          double precision,  -- percent
+  beta                double precision,
+  next_earnings       date,
+  earnings_hour       text,              -- bmo / amc / dmh (before open, after close, during market)
+  fundamentals_at     timestamptz
+);
+

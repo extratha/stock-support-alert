@@ -1,13 +1,21 @@
 import { config } from "@/lib/config";
 import { addSymbol, listSymbols, removeSymbol } from "@/lib/db/symbols";
+import { saveHistoryStats } from "@/lib/db/profiles";
 import { replaceSupports, supportAsOfBySymbol } from "@/lib/db/supports";
 import { lastCompletedSession } from "@/lib/market/calendar";
 import { stockProvider } from "@/lib/stock";
+import { historyStats } from "@/lib/profile/history";
 import { computeSupports } from "@/lib/support/calculate";
 import { ensureLogo } from "./logos";
+import { refreshFundamentals } from "./profiles";
 
-/** ~1 trading year: MA200 needs 200 bars, Fibonacci scans 120. */
-const HISTORY_BARS = 260;
+/**
+ * ~5 years of daily bars. Twelve Data charges per symbol per request, not per bar, so this costs the same as one year.
+ * The support levels only look at the last SUPPORT_BARS (MA200 needs 200, Fibonacci scans 120); the full history is
+ * used for the "worst fall" risk figure shown under each card.
+ */
+const HISTORY_BARS = 1300;
+const SUPPORT_BARS = 260;
 
 export interface RecalcSummary {
   session: string;
@@ -46,8 +54,10 @@ export async function recalculate(symbols: string[], now: Date, opts: { force?: 
   for (const [symbol, candles] of Object.entries(history.data)) {
     try {
       const completed = candles.filter((c) => c.date <= session);
-      const result = computeSupports(completed);
+      const result = computeSupports(completed.slice(-SUPPORT_BARS));
       await replaceSupports(symbol, result.asOf, result.refClose, result.tiers);
+      const stats = historyStats(completed);
+      if (stats) await saveHistoryStats(symbol, stats).catch((e) => console.error("history stats failed", symbol, e));
       summary.updated.push(symbol);
     } catch (err) {
       summary.errors[symbol] = err instanceof Error ? err.message : String(err);
@@ -72,6 +82,7 @@ export async function trackSymbol(symbol: string, now: Date): Promise<{ ok: true
       // The logo is fetched once, now, and kept in the DB. Best effort and bounded: adding the symbol never
       // fails or waits long because of it (the daily job fills in any that are still missing).
       await ensureLogo(symbol, { deadlineMs: 6000 });
+      await refreshFundamentals({ symbols: [symbol], deadlineMs: 6000 }); // bounded, never throws
       return { ok: true };
     }
     if (created) await removeSymbol(symbol);

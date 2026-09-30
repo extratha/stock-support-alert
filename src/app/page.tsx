@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { SortableStocks, type StockCardData } from "@/components/SortableStocks";
+import { listProfiles } from "@/lib/db/profiles";
 import { listTrackedSymbols } from "@/lib/db/symbols";
+import { nyToday } from "@/lib/market/calendar";
+import { toProfileData } from "@/lib/profile/describe";
 import { formatDateTime } from "@/lib/format/datetime";
 import { PAGE_DATA_TIMEOUT_MS, withTimeout } from "@/lib/timeout";
 
@@ -8,7 +11,11 @@ export const dynamic = "force-dynamic";
 
 
 export default async function DashboardPage() {
-  const stocks = await withTimeout(listTrackedSymbols(), PAGE_DATA_TIMEOUT_MS, "load tracked symbols");
+  const [stocks, profiles] = await withTimeout(
+    Promise.all([listTrackedSymbols(), listProfiles().catch(() => [])]), // the page still works without profiles
+    PAGE_DATA_TIMEOUT_MS,
+    "load tracked symbols",
+  );
 
   if (stocks.length === 0) {
     return (
@@ -33,6 +40,10 @@ export default async function DashboardPage() {
     asOf: s.asOf,
     refClose: s.refClose,
     levels: s.levels,
+    profile: (() => {
+      const p = profiles.find((x) => x.symbol === s.symbol);
+      return p ? toProfileData(p) : null;
+    })(),
   }));
 
   return (
@@ -42,7 +53,7 @@ export default async function DashboardPage() {
         <p className="mt-1 text-sm text-muted">กำลัง track {stocks.length} ตัว · ข้อมูลจากรอบเช็คล่าสุด</p>
       </div>
       {/* key: remount with the server order whenever the symbol list/order changes */}
-      <SortableStocks key={cards.map((c) => c.symbol).join(",")} initial={cards} />
+      <SortableStocks key={cards.map((c) => c.symbol).join(",")} initial={cards} today={nyToday()} />
     </div>
   );
 }

@@ -21,6 +21,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { DEFAULT_RULES } from "@/lib/alerts/evaluate";
 import { apiFetch } from "@/lib/apiFetch";
 import { formatDateString, formatDateTime } from "@/lib/format/datetime";
+import { describeProfile, type ProfileData } from "@/lib/profile/describe";
 import type { PriceEntry } from "@/lib/stock/live";
 import { METHOD_LABEL, type Method, type Tier } from "@/lib/support/types";
 import { GripIcon, RefreshIcon } from "./icons";
@@ -37,6 +38,8 @@ export interface StockCardData {
   asOf: string | null;
   refClose: number | null;
   levels: { tier: Tier; price: number; method: string }[];
+  /** fundamentals + risk figures (null until the daily job has fetched them) */
+  profile: ProfileData | null;
 }
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
@@ -56,17 +59,53 @@ const SOURCE_LABEL: Record<PriceEntry["source"], string> = {
   db: "รอบเช็กล่าสุด",
 };
 
+/** Fundamentals and risk, each figure followed by what it means in plain words. */
+function ProfileSection({ profile, price, today }: { profile: ProfileData | null; price: number | null; today: string }) {
+  const view = describeProfile(profile ?? undefined, price, today);
+  if (view.lines.length === 0) {
+    return <p className="mt-4 text-xs text-muted">ข้อมูลพื้นฐานและความเสี่ยงจะแสดงหลังรอบอัปเดตรายวัน</p>;
+  }
+  return (
+    <details open className="group mt-4 rounded-xl border border-border bg-background/40">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+        <span>ข้อมูลพื้นฐานและความเสี่ยง</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true" className="size-4 text-muted transition-transform duration-200 group-open:rotate-180">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </summary>
+      <dl className="divide-y divide-border border-t border-border">
+        {view.lines.map((l) => (
+          <div key={l.key} className="px-3 py-2.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="flex items-center gap-1.5 text-xs text-muted">
+                {l.caution && <span aria-label="ควรระวัง" className="size-1.5 shrink-0 rounded-full bg-warning" />}
+                {l.label}
+              </dt>
+              <dd className={`font-mono text-sm tabular-nums ${l.caution ? "text-warning" : ""}`}>{l.value}</dd>
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-muted">{l.meaning}</p>
+          </div>
+        ))}
+      </dl>
+      {view.footnote && <p className="border-t border-border px-3 py-2 text-[11px] leading-relaxed text-muted">{view.footnote}</p>}
+    </details>
+  );
+}
+
 function StockCard({
   stock,
   live,
   dragging,
   handle,
+  today,
 }: {
   stock: StockCardData;
   live?: PriceEntry;
   dragging?: boolean;
   /** The drag handle; rendered at the far right of the header row, after the price. */
   handle?: ReactNode;
+  /** New York date, for "earnings in N days" */
+  today: string;
 }) {
   // Live price (display only) wins; otherwise the price saved by the scheduled Twelve Data check.
   const s = { ...stock, price: live?.price ?? stock.price };
@@ -124,6 +163,7 @@ function StockCard({
           })}
         </ul>
       )}
+      {!dragging && <ProfileSection profile={s.profile} price={s.price} today={today} />}
       {s.asOf && !dragging && (
         <p className="mt-3 text-xs text-muted">
           คำนวณจากข้อมูลถึง {formatDateString(s.asOf)} (close <span className="font-mono">{usd(s.refClose ?? 0)}</span>)
@@ -133,7 +173,7 @@ function StockCard({
   );
 }
 
-function SortableCard({ stock, live }: { stock: StockCardData; live?: PriceEntry }) {
+function SortableCard({ stock, live, today }: { stock: StockCardData; live?: PriceEntry; today: string }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: stock.symbol,
   });
@@ -146,6 +186,7 @@ function SortableCard({ stock, live }: { stock: StockCardData; live?: PriceEntry
       <StockCard
         stock={stock}
         live={live}
+        today={today}
         dragging={isDragging}
         handle={
           // Press & hold, then drag. touch-none stops the page scrolling instead of dragging.
@@ -177,7 +218,7 @@ async function loadPrices(force = false): Promise<Record<string, PriceEntry>> {
   return ((await res.json()) as { prices: Record<string, PriceEntry> }).prices;
 }
 
-export function SortableStocks({ initial }: { initial: StockCardData[] }) {
+export function SortableStocks({ initial, today }: { initial: StockCardData[]; today: string }) {
   const [stocks, setStocks] = useState(initial);
   const [status, setStatus] = useState<{ kind: "saving" | "saved" | "error"; text: string } | null>(null);
   const [prices, setPrices] = useState<Record<string, PriceEntry>>({});
@@ -282,7 +323,7 @@ export function SortableStocks({ initial }: { initial: StockCardData[] }) {
         <SortableContext items={stocks.map((s) => s.symbol)} strategy={rectSortingStrategy}>
           <div className="grid gap-4 md:grid-cols-2">
             {stocks.map((s) => (
-              <SortableCard key={s.symbol} stock={s} live={prices[s.symbol]} />
+              <SortableCard key={s.symbol} stock={s} live={prices[s.symbol]} today={today} />
             ))}
           </div>
         </SortableContext>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isCronAuthorized } from "@/lib/auth";
 import { backfillLogos } from "@/lib/jobs/logos";
+import { refreshFundamentals } from "@/lib/jobs/profiles";
 import { recalculateAll } from "@/lib/jobs/recalculateSupports";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,13 @@ export async function POST(request: Request) {
     const result = await recalculateAll(new Date(), { force, offset });
     // Symbols still without a logo get a few attempts per run (each retried at most weekly). Never affects the result.
     const logos = await backfillLogos({ limit: 3 }).catch(() => null);
-    return NextResponse.json({ ...result, ...(logos && (logos.saved.length > 0 || Object.keys(logos.missing).length > 0) ? { logos } : {}) });
+    // Fundamentals older than ~20 h (Finnhub; bounded to 20 s). Display only, never affects the result.
+    const fundamentals = await refreshFundamentals().catch(() => null);
+    return NextResponse.json({
+      ...result,
+      ...(logos && (logos.saved.length > 0 || Object.keys(logos.missing).length > 0) ? { logos } : {}),
+      ...(fundamentals && (fundamentals.updated.length > 0 || Object.keys(fundamentals.errors).length > 0) ? { fundamentals } : {}),
+    });
   } catch (err) {
     console.error("recalculate failed", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "failed" }, { status: 500 });

@@ -156,3 +156,9 @@ export function isWithinWindowAfterOpen(now: Date, afterOpenMinutes: number, win
   const start = OPEN_MIN + afterOpenMinutes;
   return minutes >= start && minutes < start + windowMinutes;
 }
+
+/** Today's date (YYYY-MM-DD) in New York. */
+export function nyToday(now: Date = new Date()): string {
+  return nyTime(now).date;
+}
+

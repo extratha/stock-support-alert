@@ -9,6 +9,8 @@ vi.mock("@/lib/db/supports", () => ({
   replaceSupports: vi.fn(async () => {}),
 }));
 vi.mock("@/lib/db/symbols", () => ({ addSymbol: vi.fn(), listSymbols: vi.fn(), removeSymbol: vi.fn() }));
+const saveHistoryStats = vi.fn<(symbol: string, stats: unknown) => Promise<void>>(async () => {});
+vi.mock("@/lib/db/profiles", () => ({ saveHistoryStats }));
 
 const symbols = Array.from({ length: 20 }, (_, i) => `S${String(i).padStart(2, "0")}`);
 const now = new Date("2026-09-30T18:00:00Z");
@@ -69,5 +71,14 @@ describe("recalculate with more symbols than the per-minute API limit", () => {
     const third = await recalculate(symbols, now, { force: true, offset: second.next });
     expect(getCandlesApi.mock.calls[2][0]).toEqual(symbols.slice(16));
     expect(third).toMatchObject({ remaining: 0, next: 20 });
+  });
+
+  it("asks for ~5 years of bars (same credit cost) and stores the history stats for each symbol", async () => {
+    getCandlesApi.mockImplementation(async (batch: string[]) => ({ data: Object.fromEntries(batch.map((s) => [s, candles])), errors: {} }));
+    const { recalculate } = await import("./recalculateSupports");
+    await recalculate(symbols.slice(0, 2), now, { force: true });
+    expect(getCandlesApi.mock.calls[0][1]).toBe(1300);
+    expect(saveHistoryStats).toHaveBeenCalledTimes(2);
+    expect(saveHistoryStats.mock.calls[0][0]).toBe(symbols[0]);
   });
 });
