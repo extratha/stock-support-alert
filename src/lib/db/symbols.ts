@@ -1,6 +1,6 @@
 import type { Tier } from "@/lib/support/types";
 import { mergeOrder } from "@/lib/symbolOrder";
-import { sql } from "./client";
+import { sql, transaction } from "./client";
 
 export { SYMBOL_PATTERN } from "@/lib/symbol";
 
@@ -26,7 +26,7 @@ export async function removeSymbol(symbol: string): Promise<boolean> {
 
 /** Persist a drag & drop ordering (see mergeOrder for how partial/stale requests are handled). */
 export async function setSymbolOrder(requested: string[]): Promise<string[]> {
-  return sql().begin(async (tx) => {
+  return transaction(async (tx) => {
     const current = (await tx<{ symbol: string }[]>`select symbol from symbols order by position nulls last, symbol`).map(
       (r) => r.symbol,
     );

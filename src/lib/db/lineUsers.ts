@@ -1,4 +1,4 @@
-import { sql } from "./client";
+import { sql, transaction } from "./client";
 
 /**
  * line_users.active = currently a friend of the OA (follow / unfollow events).
@@ -70,7 +70,7 @@ export type SetNotifyResult = "enabled" | "disabled" | "unchanged" | "limit" | "
  * of recipients past `max`.
  */
 export async function setNotify(userId: string, on: boolean, max: number): Promise<SetNotifyResult> {
-  return sql().begin(async (tx) => {
+  return transaction(async (tx) => {
     const [user] = await tx<{ active: boolean; notify: boolean }[]>`
       select active, notify from line_users where user_id = ${userId} for update`;
     if (!user) return "not_found";

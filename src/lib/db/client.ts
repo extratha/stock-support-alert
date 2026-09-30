@@ -34,3 +34,32 @@ export function sql(): Sql {
   g.__sql ??= postgres(requireEnv("DATABASE_URL"), OPTIONS);
   return g.__sql;
 }
+
+type Reserved = Awaited<ReturnType<Sql["reserve"]>>;
+
+/**
+ * Run `work` inside a database transaction on ONE connection: BEGIN, work, COMMIT (ROLLBACK if it throws).
+ *
+ * Use this instead of `sql.begin()`. With `max_pipeline: 0` (see above) postgres.js never runs the hook
+ * that `begin()` relies on to pin the connection, and it then aborts every transaction with
+ * "UNSAFE_TRANSACTION: Only use sql.begin, sql.reserved or max: 1". A reserved connection is the
+ * supported way to get a pinned connection, and it works with pipelining off.
+ * Each statement in `work` must be awaited before the next one is issued.
+ */
+export async function transaction<T>(work: (tx: Reserved) => Promise<T>): Promise<T> {
+  const tx = await sql().reserve();
+  try {
+    await tx`begin`;
+    try {
+      const result = await work(tx);
+      await tx`commit`;
+      return result;
+    } catch (err) {
+      await tx`rollback`.catch(() => {}); // keep the original error
+      throw err;
+    }
+  } finally {
+    tx.release(); // always hand the connection back, or the pool would run dry
+  }
+}
+
