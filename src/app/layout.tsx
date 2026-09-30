@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   description: "แจ้งเตือนราคาหุ้น US แตะแนวรับผ่าน LINE",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="th"
