@@ -1,0 +1,31 @@
+name: Recalculate support levels
+
+# 22:00 UTC = 18:00 EDT / 17:00 EST: always after the 16:00 New York close.
+on:
+  schedule:
+    - cron: "0 22 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Recalculate even if levels are already up to date"
+        type: boolean
+        default: false
+
+concurrency:
+  group: recalculate-supports
+  cancel-in-progress: false
+
+jobs:
+  recalculate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call /api/cron/recalculate
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          FORCE: ${{ inputs.force && '?force=1' || '' }}
+        run: |
+          curl --fail-with-body -sS --retry 2 --retry-delay 10 --max-time 90 \
+            -X POST -H "Authorization: Bearer $CRON_SECRET" \
+            "${APP_URL%/}/api/cron/recalculate${FORCE}"

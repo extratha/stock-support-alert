@@ -1,0 +1,34 @@
+name: Check support alerts
+
+# GitHub cron is UTC and ignores DST. The window below covers US market hours in
+# both EDT (13:30-20:00 UTC) and EST (14:30-21:00 UTC); the endpoint itself checks
+# the real NYSE calendar (America/New_York) and no-ops when the market is closed.
+on:
+  schedule:
+    - cron: "*/30 13-20 * * 1-5"
+    - cron: "0 21 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Ignore the market-hours check (testing)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: check-alerts
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call /api/cron/check
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          FORCE: ${{ inputs.force && '?force=1' || '' }}
+        run: |
+          curl --fail-with-body -sS --retry 2 --retry-delay 10 --max-time 90 \
+            -X POST -H "Authorization: Bearer $CRON_SECRET" \
+            "${APP_URL%/}/api/cron/check${FORCE}"

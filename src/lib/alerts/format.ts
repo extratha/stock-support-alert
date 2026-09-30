@@ -1,0 +1,26 @@
+import { METHOD_LABEL, TIER_LABEL_TH, type Method, type Tier } from "@/lib/support/types";
+
+export interface AlertItem {
+  symbol: string;
+  tier: Tier;
+  method: Method;
+  price: number;
+  level: number;
+}
+
+const usd = (n: number) => `$${n.toFixed(2)}`;
+
+/** Thai LINE text for one or more alerts triggered in the same run (one message saves push quota). */
+export function formatAlertMessage(items: AlertItem[], timeLabel: string): string {
+  const blocks = items.map((a) => {
+    const diff = ((a.price - a.level) / a.level) * 100;
+    const diffText = `${diff >= 0 ? "+" : ""}${diff.toFixed(2)}%`;
+    return [
+      `${a.symbol} แตะ "${TIER_LABEL_TH[a.tier]}"`,
+      `• ราคาปัจจุบัน: ${usd(a.price)}`,
+      `• แนวรับ: ${usd(a.level)} (${METHOD_LABEL[a.method]})`,
+      `• ห่างจากแนวรับ: ${diffText}`,
+    ].join("\n");
+  });
+  return [`🔔 แจ้งเตือนแนวรับหุ้น US`, "", blocks.join("\n\n"), "", `เวลา ${timeLabel}`].join("\n");
+}
