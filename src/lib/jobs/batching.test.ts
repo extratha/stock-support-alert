@@ -7,7 +7,10 @@ vi.mock("@/lib/db/quotes", () => ({ listCachedQuotes: vi.fn(async () => []), ups
 vi.mock("@/lib/db/supports", () => ({
   supportAsOfBySymbol: vi.fn(async () => ({})),
   replaceSupports: vi.fn(async () => {}),
+  replaceSupportTests: vi.fn(async () => {}),
+  listSupports: vi.fn(async () => []),
 }));
+vi.mock("@/lib/db/alerts", () => ({ loadStates: vi.fn(async () => new Map()), stateKey: (s: string, t: string) => `${s}:${t}` }));
 vi.mock("@/lib/db/symbols", () => ({ addSymbol: vi.fn(), listSymbols: vi.fn(), removeSymbol: vi.fn() }));
 const saveHistoryStats = vi.fn<(symbol: string, stats: unknown) => Promise<void>>(async () => {});
 vi.mock("@/lib/db/profiles", () => ({ saveHistoryStats }));

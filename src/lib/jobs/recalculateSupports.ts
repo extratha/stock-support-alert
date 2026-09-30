@@ -1,12 +1,16 @@
 import { config } from "@/lib/config";
 import { addSymbol, listSymbols, removeSymbol } from "@/lib/db/symbols";
 import { saveHistoryStats } from "@/lib/db/profiles";
-import { replaceSupports, replaceSupportTests, supportAsOfBySymbol } from "@/lib/db/supports";
+import { loadStates, stateKey } from "@/lib/db/alerts";
+import { listSupports, replaceSupports, replaceSupportTests, supportAsOfBySymbol } from "@/lib/db/supports";
 import { lastCompletedSession } from "@/lib/market/calendar";
 import { stockProvider } from "@/lib/stock";
 import { historyStats } from "@/lib/profile/history";
 import { computeSupports, SUPPORT_BARS } from "@/lib/support/calculate";
 import { trackLevels } from "@/lib/support/track";
+import { findLateEvents } from "@/lib/alerts/lateCheck";
+import type { LateItem } from "@/lib/alerts/format";
+import { deliverLateAlerts } from "./checkAlerts";
 import { ensureLogo } from "./logos";
 import { refreshFundamentals } from "./profiles";
 
@@ -26,6 +30,9 @@ export interface RecalcSummary {
   remaining: number;
   /** Offset to pass on the next call when `force` is used. */
   next: number;
+  /** After-close summary pushed to LINE ("SYM:tier:touch|break"), see src/lib/alerts/lateCheck.ts */
+  lateAlerts?: string[];
+  lateAlertsError?: string;
 }
 
 /**
@@ -51,11 +58,24 @@ export async function recalculate(symbols: string[], now: Date, opts: { force?: 
   const history = await stockProvider.getDailyCandles(batch, HISTORY_BARS);
   Object.assign(summary.errors, history.errors);
 
+  // The levels as they were before this run, to see what the finished session did to them (never blocks the recalculation).
+  const [previous, states] = await Promise.all([listSupports(), loadStates()]).catch(() => [[], new Map()] as const);
+  const alertTiers = config.alertTiers();
+  const late: LateItem[] = [];
+
   for (const [symbol, candles] of Object.entries(history.data)) {
     try {
       const completed = candles.filter((c) => c.date <= session);
       const result = computeSupports(completed.slice(-SUPPORT_BARS));
+      const events = findLateEvents(symbol, previous.filter((p) => p.symbol === symbol), completed, {
+        tiers: alertTiers,
+        isArmed: (tier) => states.get(stateKey(symbol, tier))?.armed ?? true,
+      });
       await replaceSupports(symbol, result.asOf, result.refClose, result.tiers);
+      for (const e of events) {
+        const next = result.tiers.find((t) => t.tier === e.tier);
+        late.push({ ...e, next: next ? { price: next.price, method: next.method } : null });
+      }
       const stats = historyStats(completed);
       if (stats) await saveHistoryStats(symbol, stats).catch((e) => console.error("history stats failed", symbol, e));
       await replaceSupportTests(symbol, trackLevels(completed)).catch((e) => console.error("level history failed", symbol, e));
@@ -63,6 +83,12 @@ export async function recalculate(symbols: string[], now: Date, opts: { force?: 
     } catch (err) {
       summary.errors[symbol] = err instanceof Error ? err.message : String(err);
     }
+  }
+  try {
+    const sent = await deliverLateAlerts(late);
+    if (sent.length > 0) summary.lateAlerts = sent;
+  } catch (err) {
+    summary.lateAlertsError = err instanceof Error ? err.message : String(err);
   }
   return summary;
 }

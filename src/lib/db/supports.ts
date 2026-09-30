@@ -7,6 +7,7 @@ export interface StoredSupport {
   tier: Tier;
   method: Method;
   price: number;
+  zoneLow: number | null;
   asOf: string;
 }
 
@@ -37,7 +38,7 @@ export async function replaceSupports(symbol: string, asOf: string, refClose: nu
 
 export async function listSupports(): Promise<StoredSupport[]> {
   return sql()<StoredSupport[]>`
-    select symbol, tier, method, price::float8 as price, as_of::text as "asOf" from support_levels`;
+    select symbol, tier, method, price::float8 as price, zone_low::float8 as "zoneLow", as_of::text as "asOf" from support_levels`;
 }
 
 /** symbol -> as_of date of its cached levels, used to skip already-fresh symbols. */

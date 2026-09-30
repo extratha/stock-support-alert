@@ -1,5 +1,5 @@
 import { config } from "@/lib/config";
-import { formatAlertMessages, type AlertItem } from "@/lib/alerts/format";
+import { formatAlertMessages, formatLateMessages, type AlertItem, type LateItem } from "@/lib/alerts/format";
 import { evaluateTier } from "@/lib/alerts/evaluate";
 import { claimAlert, loadStates, recordAlerts, rearm, releaseAlert, stateKey } from "@/lib/db/alerts";
 import { listSupports } from "@/lib/db/supports";
@@ -109,4 +109,40 @@ export async function checkAlerts(now: Date, opts: { force?: boolean; mode?: Che
   await recordAlerts(pending.map((p) => p.item));
   summary.alerts = pending.map((p) => `${p.item.symbol}:${p.item.tier}`);
   return summary;
+}
+
+/**
+ * Push the after-close summary (see src/lib/alerts/lateCheck.ts). A missed touch claims its tier like a live alert,
+ * so the next check does not send it again and the tier re-arms after a bounce as usual. A break is sent once: the
+ * recalculation that finds it also replaces the level, and a later run has no new bars to compare.
+ * Returns what was sent, as "SYM:tier:touch|break".
+ */
+export async function deliverLateAlerts(events: LateItem[]): Promise<string[]> {
+  if (events.length === 0) return [];
+  const states = await loadStates();
+  const claimed: { item: LateItem; previousAlertAt: Date | null }[] = [];
+  const toSend: LateItem[] = [];
+  for (const e of events) {
+    const previousAlertAt = states.get(stateKey(e.symbol, e.tier))?.lastAlertAt ?? null;
+    let item = e;
+    if (e.missedTouch) {
+      if (await claimAlert(e.symbol, e.tier)) claimed.push({ item: e, previousAlertAt });
+      else item = { ...e, missedTouch: false }; // someone else alerted it meanwhile
+    }
+    if (item.missedTouch || item.broke) toSend.push(item);
+  }
+  const release = () => Promise.all(claimed.map((c) => releaseAlert(c.item.symbol, c.item.tier, c.previousAlertAt)));
+  if (toSend.length === 0) return [];
+  if ((await recipients()).length === 0) {
+    await release();
+    return [];
+  }
+  try {
+    await notify(formatLateMessages(toSend));
+  } catch (err) {
+    await release();
+    throw err;
+  }
+  await recordAlerts(claimed.map(({ item }) => ({ symbol: item.symbol, tier: item.tier, method: item.method, price: item.close, level: item.level })));
+  return toSend.map((e) => `${e.symbol}:${e.tier}:${e.broke ? "break" : "touch"}`);
 }
