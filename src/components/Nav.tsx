@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { hardNavigate } from "@/lib/hardNavigate";
-import { ActivityIcon, HistoryIcon, ListIcon, LogOutIcon, ShieldIcon, UsersIcon } from "./icons";
+import { ActivityIcon, HistoryIcon, ListIcon, LogOutIcon, UsersIcon } from "./icons";
 import { Spinner } from "./Spinner";
 
 const links: { href: string; label: string; icon: ReactNode }[] = [
@@ -64,9 +64,9 @@ export function Nav() {
         className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2"
       >
         <Link href="/" className="mr-3 flex min-h-11 items-center gap-2 font-semibold tracking-tight">
-          <span className="grid size-8 place-items-center rounded-lg bg-primary/15 text-primary ring-1 ring-primary/30">
-            <ShieldIcon className="size-4.5" />
-          </span>
+          {/* The app icon (same file as the favicon), so the brand looks the same everywhere. */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- small static SVG */}
+          <img src="/bell-icon.svg" alt="" width={32} height={32} className="size-8 shrink-0" />
           <span>
             Stock<span className="text-primary">Support</span>
           </span>

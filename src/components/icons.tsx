@@ -19,12 +19,6 @@ function Icon({ children, ...props }: SVGProps<SVGSVGElement>) {
   );
 }
 
-export const ShieldIcon = (p: SVGProps<SVGSVGElement>) => (
-  <Icon {...p}>
-    <path d="M12 3 4 6v6c0 4.5 3.2 7.8 8 9 4.8-1.2 8-4.5 8-9V6l-8-3Z" />
-    <path d="m9 12 2 2 4-4" />
-  </Icon>
-);
 export const ActivityIcon = (p: SVGProps<SVGSVGElement>) => (
   <Icon {...p}>
     <path d="M3 12h4l3-8 4 16 3-8h4" />
