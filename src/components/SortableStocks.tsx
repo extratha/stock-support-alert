@@ -17,7 +17,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { DEFAULT_RULES } from "@/lib/alerts/evaluate";
 import { apiFetch } from "@/lib/apiFetch";
 import { formatDateString, formatDateTime } from "@/lib/format/datetime";
@@ -54,7 +54,18 @@ const SOURCE_LABEL: Record<PriceEntry["source"], string> = {
   db: "รอบเช็กล่าสุด",
 };
 
-function StockCard({ stock, live, dragging }: { stock: StockCardData; live?: PriceEntry; dragging?: boolean }) {
+function StockCard({
+  stock,
+  live,
+  dragging,
+  handle,
+}: {
+  stock: StockCardData;
+  live?: PriceEntry;
+  dragging?: boolean;
+  /** The drag handle; rendered at the far right of the header row, after the price. */
+  handle?: ReactNode;
+}) {
   // Live price (display only) wins; otherwise the price saved by the scheduled Twelve Data check.
   const s = { ...stock, price: live?.price ?? stock.price };
   const priceLabel = live
@@ -66,9 +77,12 @@ function StockCard({ stock, live, dragging }: { stock: StockCardData; live?: Pri
     <>
       <div className="flex items-start justify-between gap-4">
         <h2 className="font-mono text-xl font-semibold tracking-wide">{s.symbol}</h2>
-        <div className="text-right">
-          <div className="font-mono text-xl font-medium tabular-nums">{s.price !== null ? usd(s.price) : "—"}</div>
-          <div className="text-xs text-muted">{priceLabel}</div>
+        <div className="flex items-start gap-1">
+          <div className="text-right">
+            <div className="font-mono text-xl font-medium tabular-nums">{s.price !== null ? usd(s.price) : "—"}</div>
+            <div className="text-xs text-muted">{priceLabel}</div>
+          </div>
+          {handle}
         </div>
       </div>
 
@@ -122,27 +136,31 @@ function SortableCard({ stock, live }: { stock: StockCardData; live?: PriceEntry
     <section
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`surface relative p-5 ${
-        isDragging ? "z-20 scale-[1.02] shadow-2xl shadow-black/60 ring-2 ring-primary/60" : ""
-      }`}
+      className={`surface p-5 ${isDragging ? "z-20 scale-[1.02] shadow-2xl shadow-black/60 ring-2 ring-primary/60" : ""}`}
     >
-      {/* Press & hold the handle, then drag. touch-none stops the page scrolling instead of dragging. */}
-      <button
-        type="button"
-        ref={setActivatorNodeRef}
-        {...attributes}
-        {...listeners}
-        aria-label={`ลากเพื่อจัดลำดับ ${stock.symbol}`}
-        className={`absolute right-2 top-2 grid size-11 touch-none place-items-center rounded-lg text-muted transition-colors duration-150 hover:bg-elevated hover:text-primary ${
-          isDragging ? "cursor-grabbing text-primary" : "cursor-grab"
-        }`}
-      >
-        <GripIcon className="size-5" />
-      </button>
-      {/* Leave room for the handle so it never covers the price. */}
-      <div className="pr-10">
-        <StockCard stock={stock} live={live} dragging={isDragging} />
-      </div>
+      <StockCard
+        stock={stock}
+        live={live}
+        dragging={isDragging}
+        handle={
+          // Press & hold, then drag. touch-none stops the page scrolling instead of dragging.
+          // It is part of the header row (right after the price) rather than floating over the card,
+          // so nothing below has to reserve space for it. The negative margins keep the 44px touch
+          // target while letting the dots line up with the card's content edge.
+          <button
+            type="button"
+            ref={setActivatorNodeRef}
+            {...attributes}
+            {...listeners}
+            aria-label={`ลากเพื่อจัดลำดับ ${stock.symbol}`}
+            className={`-mr-3 -mt-2 grid size-11 shrink-0 touch-none place-items-center rounded-lg text-muted transition-colors duration-150 hover:bg-elevated hover:text-primary ${
+              isDragging ? "cursor-grabbing text-primary" : "cursor-grab"
+            }`}
+          >
+            <GripIcon className="size-5" />
+          </button>
+        }
+      />
     </section>
   );
 }
