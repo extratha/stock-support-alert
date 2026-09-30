@@ -1,3 +1,5 @@
+import { TIERS, type Tier } from "@/lib/support/types";
+
 /** Environment access. Values are read lazily so `next build` works without secrets. */
 export function requireEnv(name: string): string {
   const value = process.env[name];
@@ -33,4 +35,12 @@ export const config = {
    * against LINE's monthly quota). Friends beyond this can still ask "ขอแนวรับ" for free.
    */
   maxPushRecipients: () => Math.max(0, Math.floor(num("MAX_PUSH_RECIPIENTS", 5))),
+  /**
+   * Tiers that send LINE alerts. Default: only "major" (แนวรับสำคัญ), the only tier the backtest found better than
+   * buying on a random day. ALERT_TIERS=minor,intermediate,major restores all three. Unknown names are ignored.
+   */
+  alertTiers: (): Tier[] => {
+    const raw = process.env.ALERT_TIERS?.split(",").map((t) => t.trim()).filter((t): t is Tier => (TIERS as readonly string[]).includes(t));
+    return raw && raw.length > 0 ? raw : ["major"];
+  },
 };

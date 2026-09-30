@@ -121,3 +121,24 @@ create table if not exists stock_profiles (
   fundamentals_at     timestamptz
 );
 
+
+-- Swing Low levels are zones now: the bottom of the zone and how many times the price bounced there (null for other methods).
+alter table support_levels add column if not exists zone_low numeric(14, 4);
+alter table support_levels add column if not exists touches integer;
+
+-- Every touch of a support level when the current logic is replayed over the stock's own history (see
+-- src/lib/support/track.ts): did the level hold or break? Replaced for a symbol by each daily recalculation.
+create table if not exists support_tests (
+  symbol       text not null references symbols(symbol) on delete cascade,
+  tier         text not null check (tier in ('minor', 'intermediate', 'major')),
+  method       text not null,
+  level        numeric(14, 4) not null,
+  zone_low     numeric(14, 4),
+  touches      integer,
+  touched_on   date not null,
+  outcome      text not null check (outcome in ('held', 'broken', 'unclear', 'open')),
+  resolved_on  date,
+  -- share of "held" for an arbitrary level at the same distance on the stock's other days (the yardstick)
+  expected_held double precision,
+  primary key (symbol, tier, touched_on)
+);

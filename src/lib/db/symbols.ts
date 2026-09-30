@@ -61,7 +61,7 @@ export interface TrackedSymbol {
   quoteTime: Date | null;
   asOf: string | null;
   refClose: number | null;
-  levels: { tier: Tier; price: number; method: string }[];
+  levels: { tier: Tier; price: number; method: string; zoneLow: number | null; touches: number | null }[];
 }
 
 /** Everything the dashboard needs, from cache only (no external API calls). */
@@ -72,8 +72,9 @@ export async function listTrackedSymbols(): Promise<TrackedSymbol[]> {
       select symbol,
              case when logo_type is not null then (extract(epoch from logo_checked_at) * 1000)::float8 end as "logoVersion"
       from symbols order by position nulls last, symbol`,
-    db<{ symbol: string; tier: Tier; price: number; method: string; ref_close: number; as_of: string }[]>`
-      select symbol, tier, price::float8 as price, method, ref_close::float8 as ref_close, as_of::text as as_of
+    db<{ symbol: string; tier: Tier; price: number; method: string; zoneLow: number | null; touches: number | null; ref_close: number; as_of: string }[]>`
+      select symbol, tier, price::float8 as price, method, zone_low::float8 as "zoneLow", touches,
+             ref_close::float8 as ref_close, as_of::text as as_of
       from support_levels`,
     db<{ symbol: string; price: number; quote_time: Date }[]>`
       select symbol, price::float8 as price, quote_time from quotes`,
@@ -90,7 +91,7 @@ export async function listTrackedSymbols(): Promise<TrackedSymbol[]> {
       quoteTime: quote?.quote_time ?? null,
       asOf: mine[0]?.as_of ?? null,
       refClose: mine[0]?.ref_close ?? null,
-      levels: mine.map(({ tier, price, method }) => ({ tier, price, method })),
+      levels: mine.map(({ tier, price, method, zoneLow, touches }) => ({ tier, price, method, zoneLow, touches })),
     };
   });
 }

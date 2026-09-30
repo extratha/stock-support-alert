@@ -18,6 +18,8 @@ import { lastCompletedSession } from "@/lib/market/calendar";
 import { twelveData } from "@/lib/stock/twelvedata";
 import type { Candle, Tier } from "@/lib/support/types";
 import { TIER_LABEL_TH } from "@/lib/support/types";
+import { TRACK_RULES, trackLevels, type LevelTest } from "@/lib/support/track";
+import { config } from "@/lib/config";
 import { sql } from "@/lib/db/client";
 
 const BARS = 1400; // ~5.5 years of daily bars
@@ -122,6 +124,7 @@ async function main() {
 ## ทดสอบอะไร
 คำถาม: *"ถ้าซื้อเมื่อราคาแตะแนวรับตามที่ระบบแจ้งเตือน ผลหลังจากนั้นดีกว่า/ขาดทุนน้อยกว่าการซื้อวันอื่น ๆ ของหุ้นตัวเดียวกันหรือไม่"*
 
+- **แนวรับเชิงโครงสร้างเท่านั้น:** Swing Low (รวมเป็นโซน นับจำนวนครั้งที่เด้ง), MA50/MA200, Fibonacci — Pivot รายวันถูกเอาออกแล้ว เพราะคำนวณใหม่จากแท่งเดียวทุกวันจึงเลื่อนตามราคาลงไปเรื่อย ๆ (ผลของเวอร์ชันที่ยังมี Pivot ดูได้จากประวัติ git ของไฟล์นี้)
 - ใช้**โค้ดตัวจริงของระบบ** (\`computeSupports\` จัดระดับแรก/ถัดไป/สำคัญ + กติกาแจ้งเตือน \`evaluateTier\`) เดินย้อนทีละวัน
 - **ไม่แอบดูอนาคต:** วันที่ t ใช้ข้อมูลถึงวัน t−1 เท่านั้น (เหมือนระบบจริงที่คำนวณหลังตลาดปิดวันก่อน)
 - **นิยามการแตะ = เหมือนแจ้งเตือนจริง:** ราคาต่ำสุดของวัน ≤ แนวรับ + 0.3% แจ้งครั้งเดียวต่อระดับ จนกว่าราคาปิดจะเด้งเหนือแนวรับ +1% ถึงนับครั้งใหม่
@@ -186,21 +189,21 @@ ${table(cols, tierRows(vsDip, levelRows))}`);
 
 ${table(cols, peakRows.map(([label, sm]) => summaryRow(label, sm)))}`);
 
-  const methodGroups: [string, (m: string) => boolean][] = [
-    ["Pivot รายวัน (S1–S3)", (m) => m.startsWith("pivot")],
-    ["MA50", (m) => m === "ma50"],
-    ["MA200", (m) => m === "ma200"],
-    ["Swing Low", (m) => m === "swing_low"],
-    ["Fibonacci", (m) => m.startsWith("fib")],
+  const methodGroups: [string, (e: TouchEvent) => boolean][] = [
+    ["MA50", (e) => e.method === "ma50"],
+    ["MA200", (e) => e.method === "ma200"],
+    ["Swing Low (เด้งครั้งเดียว)", (e) => e.method === "swing_low" && (e.touches ?? 0) < 2],
+    ["Swing Low (เด้ง ≥2 ครั้ง)", (e) => e.method === "swing_low" && (e.touches ?? 0) >= 2],
+    ["Fibonacci", (e) => e.method.startsWith("fib")],
   ];
   sections.push(`## แยกตามชนิดของแนวรับ (ซื้อที่ราคาปิด)
-Pivot รายวันอยู่ใกล้ราคามากและเปลี่ยนทุกวัน ส่วน MA/Swing Low/Fibonacci เป็นระดับเชิงโครงสร้างที่เปลี่ยนช้ากว่า
+ทุกชนิดเป็นระดับเชิงโครงสร้าง (Pivot รายวันถูกเอาออกแล้ว) — Swing Low แยกตามจำนวนครั้งที่ราคาเคยเด้งในโซนนั้น
 
 ### เทียบเดือนเดียวกัน
-${table(cols, methodGroups.map(([label, test]) => summaryRow(label, vsMonth(closeRows(events.filter((e) => test(e.method)))))))}
+${table(cols, methodGroups.map(([label, test]) => summaryRow(label, vsMonth(closeRows(events.filter(test))))))}
 
 ### เทียบปีเดียวกัน ที่เพิ่งลงมาใกล้เคียงกัน (เข้มที่สุด)
-${table(cols, methodGroups.map(([label, test]) => summaryRow(label, vsDip(closeRows(events.filter((e) => test(e.method)))))))}`);
+${table(cols, methodGroups.map(([label, test]) => summaryRow(label, vsDip(closeRows(events.filter(test))))))}`);
 
   sections.push(`## แยกตามปี (ทุกระดับ, ซื้อที่ราคาปิด, เทียบปีเดียวกันที่เพิ่งลงใกล้เคียงกัน)
 ดูว่าผลคงที่ข้ามช่วงตลาดหรือไม่ (2022 เป็นตลาดหมี)
@@ -211,14 +214,40 @@ ${table(["ปี", ...cols.slice(1)], years.map((y) => summaryRow(y, vsDip(close
 
 ${table(cols, symbolsWithEvents.map((s) => summaryRow(s, vsDip(closeRows(events.filter((e) => e.symbol === s))))))}`);
 
+  // Did the levels hold? Same replay the dashboard shows under each level, against the same rule on random prices.
+  const tests: LevelTest[] = Object.values(candles).flatMap((c) => trackLevels(c));
+  const holdRow = (label: string, group: LevelTest[]) => {
+    const done = group.filter((t) => t.outcome !== "open" && t.expectedHeld !== null);
+    const n = done.length;
+    const held = done.filter((t) => t.outcome === "held").length / n;
+    const broken = done.filter((t) => t.outcome === "broken").length / n;
+    const expected = mean(done.map((t) => t.expectedHeld!));
+    return [label, String(n), share(held), share(broken), share(1 - held - broken), share(expected), n ? `**${pts(held - expected)}**` : "–"];
+  };
+  const testGroups: [string, (t: LevelTest) => boolean][] = [
+    ...TIERS.map((tier): [string, (t: LevelTest) => boolean] => [TIER_LABEL_TH[tier], (t) => t.tier === tier]),
+    ["MA50", (t) => t.method === "ma50"],
+    ["MA200", (t) => t.method === "ma200"],
+    ["Swing Low (เด้งครั้งเดียว)", (t) => t.method === "swing_low" && (t.touches ?? 0) < 2],
+    ["Swing Low (เด้ง ≥2 ครั้ง)", (t) => t.method === "swing_low" && (t.touches ?? 0) >= 2],
+    ["Fibonacci", (t) => t.method.startsWith("fib")],
+  ];
+  sections.push(`## แนวรับ "รับได้" หรือ "หลุด" บ่อยแค่ไหน (ตัวเลขเดียวกับที่หน้าเว็บแสดงใต้แต่ละระดับ)
+ทุกครั้งที่ราคาแตะระดับ ระบบ**จำราคาระดับนั้นไว้** (ไม่ใช้ค่าที่คำนวณใหม่วันถัดไป) แล้วดูว่าเกิดอะไรก่อนภายใน ${TRACK_RULES.maxDays} วันทำการ: ราคาปิดเด้งขึ้น ≥${TRACK_RULES.bounce * 100}% จากระดับ = **รับได้**, ราคาปิดต่ำกว่าระดับ (หรือขอบล่างของโซน) เกิน ${TRACK_RULES.breakBelow * 100}% = **หลุด**, ไม่เกิดทั้งสอง = ไม่ชัด
+"รับได้" อย่างเดียวพิสูจน์อะไรไม่ได้ (วันที่แตะ ราคาปิดมักอยู่เหนือระดับอยู่แล้ว จึงไปถึง +3% ง่ายกว่า −3%) ตัวเปรียบเทียบจึงเอา**ระยะห่างจากราคาปิดวันก่อนเท่ากัน**ไปวางเป็น "แนวรับมั่ว ๆ" ในทุกวันอื่นของหุ้นตัวเดียวกันที่ราคาแตะระดับนั้น แล้วใช้กติกาเดียวกัน (ทดสอบกับราคาสุ่มแบบ random walk แล้ว สองค่านี้ออกมาเท่ากัน ตามที่ควรเป็นเมื่อไม่มีแนวรับจริง)
+
+${table(["กลุ่ม", "จำนวนครั้งที่แตะ", "รับได้", "หลุด", "ไม่ชัด", "รับได้ (ระดับมั่ว ระยะเท่ากัน)", "**ส่วนต่าง**"], testGroups.map(([label, f]) => holdRow(label, tests.filter(f))))}`);
+
   // how noisy would the live alerts be? (every event = one alert the live rules would have sent)
   const tradingDays = new Set(samples.map((x) => x.date)).size;
   const daysWithAlert = new Set(events.map((e) => e.date)).size;
   const months = tradingDays / 21;
+  const alertTiers = config.alertTiers();
+  const alertDays = new Set(events.filter((e) => alertTiers.includes(e.tier)).map((e) => e.date)).size;
   sections.push(`## ความถี่ของแจ้งเตือน (ถ้ารันกติกานี้ย้อนหลัง)
 - เหตุการณ์ทั้งหมด ${events.length} ครั้ง ≈ **${(events.length / Object.keys(candles).length / months).toFixed(1)} ครั้งต่อหุ้นต่อเดือน** (แนวรับแรก ${(byTier("minor").length / Object.keys(candles).length / months).toFixed(1)}, ถัดไป ${(byTier("intermediate").length / Object.keys(candles).length / months).toFixed(1)}, สำคัญ ${(byTier("major").length / Object.keys(candles).length / months).toFixed(1)})
 - มีอย่างน้อย 1 แจ้งเตือนใน **${share(daysWithAlert / tradingDays)} ของวันทำการ** (รวมทุกหุ้น) ≈ ${(21 * daysWithAlert / tradingDays).toFixed(0)} ข้อความต่อเดือนต่อผู้รับ เพราะระบบรวมแจ้งเตือนของวันเดียวกันเป็นข้อความเดียว — เทียบกับโควตา push ของ LINE ที่จำกัดต่อเดือน
-- แนวรับแรก/ถัดไปส่วนใหญ่เป็น Pivot รายวันที่อยู่ใกล้ราคาแค่ 1–2% จึงถูกแตะบ่อย`);
+- ระบบจริงแจ้งเตือนเฉพาะ: **${alertTiers.map((t) => TIER_LABEL_TH[t]).join(", ")}** (ตั้งด้วย \`ALERT_TIERS\`) → มีแจ้งเตือนใน ${share(alertDays / tradingDays)} ของวันทำการ ≈ **${(21 * alertDays / tradingDays).toFixed(0)} ข้อความต่อเดือนต่อผู้รับ**`);
 
   sections.push(`## ข้อจำกัดที่ต้องอ่านก่อนสรุปอะไร
 1. **ตัวอย่างน้อยและกระจุกตัว:** เหตุการณ์ที่เกิดใกล้กัน (หุ้นตัวเดียวกันแตะหลายระดับใกล้ ๆ กัน หรือหลายตัวแตะพร้อมกันตอนตลาดลง) ไม่เป็นอิสระต่อกัน ช่วงเชื่อมั่นจาก bootstrap จึง**แคบกว่าความไม่แน่นอนจริง**
@@ -226,7 +255,7 @@ ${table(cols, symbolsWithEvents.map((s) => summaryRow(s, vsDip(closeRows(events.
 3. **Survivorship bias:** หุ้นที่ track คือตัวที่ผู้ใช้เลือกในวันนี้ ซึ่งผ่านมารอดและโตมาแล้ว ตัวที่ตกลงไปแล้วไม่อยู่ในรายการ
 4. **ราคาในแท่งวัน:** ไม่รู้ลำดับเวลาภายในวัน (ราคาต่ำสุดเกิดก่อนหรือหลังที่ระบบเช็ก) และระบบจริงเช็กตอน 13:30 น. นิวยอร์ก ซึ่งอาจยังไม่เห็นราคาต่ำสุดของทั้งวัน จึงอาจจับการแตะได้น้อยกว่าในการทดสอบนี้
 5. **ไม่รวมค่าธรรมเนียม ภาษี การลื่นไถลของราคา** และไม่จำลองการแบ่งไม้หลายครั้ง วัดเฉพาะ "ซื้อที่จุดที่แตะ" ทีละครั้ง
-6. **พารามิเตอร์ของระบบ** (เช่น 5 แท่ง, 60/120 แท่ง) เป็นค่ามาตรฐานที่เลือกเอง ไม่ได้ปรับจูนจากผลนี้ (ตั้งใจ เพื่อไม่ให้ overfit) ถ้าไปปรับจนผลดี ผลนั้นจะเชื่อถือไม่ได้`);
+6. **พารามิเตอร์ของระบบ** (เช่น 5 แท่ง, โซนกว้าง 1.5%, 250/120 แท่ง, ±3% ใน 20 วัน) เป็นค่ามาตรฐานที่เลือกเอง ไม่ได้ปรับจูนจากผลนี้ (ตั้งใจ เพื่อไม่ให้ overfit) ถ้าไปปรับจนผลดี ผลนั้นจะเชื่อถือไม่ได้`);
 
   mkdirSync(dirname(REPORT), { recursive: true });
   writeFileSync(REPORT, sections.join("\n\n") + "\n");

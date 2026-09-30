@@ -11,6 +11,10 @@ export interface Candle {
 export const TIERS = ["minor", "intermediate", "major"] as const;
 export type Tier = (typeof TIERS)[number];
 
+/**
+ * The pivot methods are no longer computed (a pivot is rebuilt from one day's bar, so it followed the price down
+ * every day); they stay in the type so alerts already stored in the history still show a label.
+ */
 export type Method =
   | "pivot_s1"
   | "pivot_s2"
@@ -26,6 +30,10 @@ export type Method =
 export interface SupportCandidate {
   method: Method;
   price: number;
+  /** Swing Low only: the bottom of the zone (the level counts as broken below this) */
+  zoneLow?: number;
+  /** Swing Low only: how many times the price turned up in this zone */
+  touches?: number;
 }
 
 /** A candidate that has been assigned to an importance tier. */

@@ -23,7 +23,8 @@ import { apiFetch } from "@/lib/apiFetch";
 import { formatDateString, formatDateTime } from "@/lib/format/datetime";
 import { describeProfile, profileText, type ProfileData } from "@/lib/profile/describe";
 import type { PriceEntry } from "@/lib/stock/live";
-import { METHOD_LABEL, type Method, type Tier } from "@/lib/support/types";
+import type { TierRecord, TrackSummary } from "@/lib/support/track";
+import { METHOD_LABEL, TIER_LABEL_TH, type Method, type Tier } from "@/lib/support/types";
 import { CheckIcon, CopyIcon, GripIcon, RefreshIcon } from "./icons";
 import { Spinner } from "./Spinner";
 import { StockLogo } from "./StockLogo";
@@ -37,7 +38,9 @@ export interface StockCardData {
   quoteTimeLabel: string | null;
   asOf: string | null;
   refClose: number | null;
-  levels: { tier: Tier; price: number; method: string }[];
+  levels: { tier: Tier; price: number; method: string; zoneLow: number | null; touches: number | null }[];
+  /** how this stock's levels behaved when the current logic is replayed over its history */
+  track: TrackSummary;
   /** fundamentals + risk figures (null until the daily job has fetched them) */
   profile: ProfileData | null;
 }
@@ -58,6 +61,14 @@ const SOURCE_LABEL: Record<PriceEntry["source"], string> = {
   yahoo: "Yahoo",
   db: "รอบเช็กล่าสุด",
 };
+
+/** "ย้อนหลังรับได้ 7/12 ครั้ง (58%) · หลุด 4 — ระดับมั่วระยะเดียวกัน 55%" for one tier; null when never touched. */
+function recordText(r: TierRecord): string | null {
+  const total = r.held + r.broken + r.unclear;
+  if (total === 0) return null;
+  const pct = (x: number) => `${Math.round((x / total) * 100)}%`;
+  return `ย้อนหลังรับได้ ${r.held}/${total} ครั้ง (${pct(r.held)}) · หลุด ${r.broken} — ระดับมั่วระยะเดียวกันรับได้ ${pct(r.expectedHeld)}`;
+}
 
 /** Copies the section as plain text (to paste into an AI chat for further analysis). */
 function CopyButton({ text }: { text: () => string }) {
@@ -159,6 +170,13 @@ function StockCard({
         </div>
       </div>
 
+      {s.track.recentBreak && (
+        <p className="mt-4 rounded-xl bg-danger/10 px-3 py-2 text-xs leading-relaxed text-danger ring-1 ring-danger/25">
+          {TIER_LABEL_TH[s.track.recentBreak.tier]} {usd(s.track.recentBreak.level)} (
+          {METHOD_LABEL[s.track.recentBreak.method] ?? s.track.recentBreak.method}) หลุดเมื่อ{" "}
+          {formatDateString(s.track.recentBreak.resolvedOn!)} — ระดับที่แสดงด้านล่างคือระดับถัดลงไป
+        </p>
+      )}
       {s.levels.length === 0 ? (
         <p className="mt-4 text-sm text-muted">ยังไม่มีแนวรับ</p>
       ) : (
@@ -166,6 +184,7 @@ function StockCard({
           {s.levels.map((l) => {
             const dist = s.price !== null ? ((s.price - l.price) / l.price) * 100 : null;
             const touched = s.price !== null && s.price <= l.price * (1 + DEFAULT_RULES.touchTolerance);
+            const record = recordText(s.track.records[l.tier]);
             return (
               <li
                 key={l.tier}
@@ -174,9 +193,13 @@ function StockCard({
                 <div className="justify-self-start">
                   <TierBadge tier={l.tier} />
                 </div>
-                <div className="order-3 col-span-2 flex items-baseline gap-2 sm:order-none sm:col-span-1">
+                <div className="order-3 col-span-2 flex flex-wrap items-baseline gap-x-2 sm:order-none sm:col-span-1">
                   <span className="font-mono text-base tabular-nums">{usd(l.price)}</span>
-                  <span className="text-xs text-muted">{METHOD_LABEL[l.method as Method] ?? l.method}</span>
+                  <span className="text-xs text-muted">
+                    {METHOD_LABEL[l.method as Method] ?? l.method}
+                    {l.zoneLow !== null && l.zoneLow < l.price && ` · โซน ${usd(l.zoneLow)}–${usd(l.price)}`}
+                    {l.touches !== null && ` · เคยเด้ง ${l.touches} ครั้ง`}
+                  </span>
                 </div>
                 <div className="justify-self-end font-mono text-sm tabular-nums">
                   {touched ? (
@@ -187,10 +210,18 @@ function StockCard({
                     <span className={dist < 2 ? "text-warning" : "text-muted"}>+{dist.toFixed(1)}%</span>
                   ) : null}
                 </div>
+                {record && <p className="order-4 col-span-full text-[11px] text-muted">{record}</p>}
               </li>
             );
           })}
         </ul>
+      )}
+      {s.track.since && s.levels.length > 0 && !dragging && (
+        <p className="mt-2 text-[11px] leading-relaxed text-muted">
+          &quot;ย้อนหลัง&quot; = ใช้วิธีคำนวณปัจจุบันกับราคาจริงของหุ้นตัวนี้ตั้งแต่ {formatDateString(s.track.since)} ทุกครั้งที่ราคาแตะระดับ
+          นับว่ารับได้เมื่อราคาปิดเด้งขึ้นเกิน 3% ก่อนจะปิดต่ำกว่าระดับเกิน 3% (ภายใน 20 วันทำการ) · &quot;ระดับมั่ว&quot; = เอาระยะห่างเท่ากันไปวางในวันอื่น ๆ
+          ของหุ้นตัวนี้ ถ้าแนวรับรับได้ไม่มากกว่าระดับมั่ว ก็ไม่ได้มีความหมายพิเศษ — สถิติในอดีต ไม่ใช่การรับประกัน
+        </p>
       )}
       {!dragging && <ProfileSection symbol={s.symbol} profile={s.profile} price={s.price} today={today} />}
       {s.asOf && !dragging && (

@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 import { computeSupports } from "./calculate";
 import { fibonacciRetracement } from "./fibonacci";
 import { sma } from "./movingAverage";
-import { classicPivot } from "./pivot";
-import { findSwingLows } from "./swing";
+import { findSwingLows, swingZones } from "./swing";
 import type { Candle } from "./types";
 
 const bar = (i: number, close: number, spread = 1): Candle => ({
@@ -13,13 +12,6 @@ const bar = (i: number, close: number, spread = 1): Candle => ({
   low: close - spread,
   close,
   volume: 1000,
-});
-
-describe("classicPivot", () => {
-  it("matches the textbook formulas", () => {
-    // H=110 L=90 C=100 -> P=100, S1=90, S2=80, S3=90-2*(110-100)=70
-    expect(classicPivot({ high: 110, low: 90, close: 100 })).toEqual({ pivot: 100, s1: 90, s2: 80, s3: 70 });
-  });
 });
 
 describe("sma", () => {
@@ -36,6 +28,19 @@ describe("findSwingLows", () => {
     const candles = closes.map((c, i) => bar(i, c, 0));
     const lows = findSwingLows(candles, { wing: 3, lookback: 100 });
     expect(lows.map((c) => c.low)).toEqual([14]); // the final 13 has no right-side confirmation
+  });
+});
+
+/** V shapes: each value in `bottoms` is a low the price falls to (from 120) and then climbs back from. */
+const vs = (bottoms: number[], depth = 8): Candle[] =>
+  bottoms.flatMap((b) => [...Array.from({ length: depth }, (_, k) => b + (depth - k) * 2), b, ...Array.from({ length: depth }, (_, k) => b + (k + 1) * 2)]).map((c, i) => bar(i, c, 0));
+
+describe("swingZones", () => {
+  it("groups bounces at about the same price into one zone and counts them", () => {
+    const zones = swingZones(vs([100, 130, 100.8, 99.5, 130]), { wing: 5, lookback: 500, width: 0.015 });
+    const z = zones.find((x) => x.low === 99.5)!;
+    expect(z).toMatchObject({ low: 99.5, high: 100.8, touches: 3 });
+    expect(zones.map((x) => x.touches)).toEqual([2, 3]); // highest first: the two bounces at 130, then the 100 zone
   });
 });
 
@@ -77,6 +82,28 @@ describe("computeSupports", () => {
     const r = computeSupports(downtrend);
     expect(r.candidates.every((c) => c.price < r.refClose)).toBe(true);
     expect(r.tiers.some((t) => t.method === "ma200")).toBe(false);
+  });
+
+  it("uses structural levels only (no daily pivots) and keeps the tiers at least 1% apart", () => {
+    const r = computeSupports(uptrend);
+    expect(r.candidates.every((c) => !c.method.startsWith("pivot"))).toBe(true);
+    for (let i = 1; i < r.tiers.length; i++) {
+      const above = r.tiers[i - 1];
+      expect(r.tiers[i].price).toBeLessThanOrEqual(Math.min(above.price, above.zoneLow ?? above.price) * 0.99);
+    }
+  });
+
+  it("a swing zone the price bounced from several times becomes a level with its zone and bounce count", () => {
+    // repeated bounces off ~100, then a rally to 150
+    const candles = [...vs([100, 100.8, 99.5, 100.5]), ...Array.from({ length: 30 }, (_, i) => bar(1000 + i, 120 + i, 0))];
+    const swing = computeSupports(candles).candidates.find((c) => c.method === "swing_low" && c.touches === 4)!;
+    expect(swing).toMatchObject({ price: 100.8, zoneLow: 99.5 });
+  });
+
+  it("when the price is inside a zone, the level left to watch is the zone's bottom", () => {
+    const candles = [...vs([100, 101]), bar(999, 100.5, 0)];
+    const swing = computeSupports(candles).candidates.find((c) => c.method === "swing_low")!;
+    expect(swing).toMatchObject({ price: 100, zoneLow: 100, touches: 2 });
   });
 
   it("rejects too little history", () => {

@@ -1,3 +1,4 @@
+import { config } from "@/lib/config";
 import { formatAlertMessages, type AlertItem } from "@/lib/alerts/format";
 import { evaluateTier } from "@/lib/alerts/evaluate";
 import { claimAlert, loadStates, recordAlerts, rearm, releaseAlert, stateKey } from "@/lib/db/alerts";
@@ -63,7 +64,9 @@ export async function checkAlerts(now: Date, opts: { force?: boolean; mode?: Che
 
   const pending: { item: AlertItem; previousAlertAt: Date | null }[] = [];
 
+  const alertTiers = config.alertTiers();
   for (const s of supports) {
+    if (!alertTiers.includes(s.tier)) continue;
     const price = quotes.prices[s.symbol];
     if (price === undefined) continue;
     const state = states.get(stateKey(s.symbol, s.tier));

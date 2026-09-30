@@ -1,5 +1,5 @@
 import { DEFAULT_RULES, evaluateTier, type TierState } from "@/lib/alerts/evaluate";
-import { computeSupports } from "@/lib/support/calculate";
+import { computeSupports, SUPPORT_BARS } from "@/lib/support/calculate";
 import type { Candle, Method, Tier } from "@/lib/support/types";
 
 /**
@@ -12,8 +12,8 @@ import type { Candle, Method, Tier } from "@/lib/support/types";
 export const HORIZONS = [5, 20, 60] as const;
 export type Horizon = (typeof HORIZONS)[number];
 
-/** Live system feeds ~260 bars into the calculation; every indicator only looks at the last N bars, so this matches. */
-export const SUPPORT_WINDOW = 260;
+/** Same window the live system feeds into the calculation. */
+export const SUPPORT_WINDOW = SUPPORT_BARS;
 /** First day evaluated: MA200 needs 200 prior bars. */
 export const WARMUP_BARS = 200;
 /** "A real drop": a close this far below the entry within 20 trading days. */
@@ -37,6 +37,8 @@ export interface TouchEvent {
   tier: Tier;
   method: Method;
   level: number;
+  /** Swing Low zones: how many bounces the zone had */
+  touches: number | null;
   /** (a) bought at the close of the touch day (what you can do after seeing an alert) */
   atClose: Outcome;
   /** (b) limit order at the level: filled only if the day's low reached it (price = min(level, open)); null = not filled */
@@ -93,6 +95,7 @@ export function findTouchEvents(symbol: string, candles: Candle[]): TouchEvent[]
           tier: t.tier,
           method: t.method,
           level: t.price,
+          touches: t.touches ?? null,
           atClose: outcomeFrom(candles, d, today.close, false),
           atLevel: fills ? outcomeFrom(candles, d, Math.min(t.price, today.open), true) : null,
         });

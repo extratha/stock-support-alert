@@ -1,21 +1,21 @@
 import { config } from "@/lib/config";
 import { addSymbol, listSymbols, removeSymbol } from "@/lib/db/symbols";
 import { saveHistoryStats } from "@/lib/db/profiles";
-import { replaceSupports, supportAsOfBySymbol } from "@/lib/db/supports";
+import { replaceSupports, replaceSupportTests, supportAsOfBySymbol } from "@/lib/db/supports";
 import { lastCompletedSession } from "@/lib/market/calendar";
 import { stockProvider } from "@/lib/stock";
 import { historyStats } from "@/lib/profile/history";
-import { computeSupports } from "@/lib/support/calculate";
+import { computeSupports, SUPPORT_BARS } from "@/lib/support/calculate";
+import { trackLevels } from "@/lib/support/track";
 import { ensureLogo } from "./logos";
 import { refreshFundamentals } from "./profiles";
 
 /**
  * ~5 years of daily bars. Twelve Data charges per symbol per request, not per bar, so this costs the same as one year.
- * The support levels only look at the last SUPPORT_BARS (MA200 needs 200, Fibonacci scans 120); the full history is
- * used for the "worst fall" risk figure shown under each card.
+ * The support levels only look at the last SUPPORT_BARS; the full history is used for the "worst fall" risk figure
+ * and to replay how this stock's levels behaved in the past (held or broke).
  */
 const HISTORY_BARS = 1300;
-const SUPPORT_BARS = 260;
 
 export interface RecalcSummary {
   session: string;
@@ -58,6 +58,7 @@ export async function recalculate(symbols: string[], now: Date, opts: { force?: 
       await replaceSupports(symbol, result.asOf, result.refClose, result.tiers);
       const stats = historyStats(completed);
       if (stats) await saveHistoryStats(symbol, stats).catch((e) => console.error("history stats failed", symbol, e));
+      await replaceSupportTests(symbol, trackLevels(completed)).catch((e) => console.error("level history failed", symbol, e));
       summary.updated.push(symbol);
     } catch (err) {
       summary.errors[symbol] = err instanceof Error ? err.message : String(err);
