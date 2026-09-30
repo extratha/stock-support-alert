@@ -3,12 +3,13 @@
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { ActivityIcon, HistoryIcon, ListIcon, ShieldIcon } from "./icons";
+import { ActivityIcon, HistoryIcon, ListIcon, ShieldIcon, UsersIcon } from "./icons";
 import { Spinner } from "./Spinner";
 
 const links: { href: string; label: string; icon: ReactNode }[] = [
   { href: "/", label: "แนวรับปัจจุบัน", icon: <ActivityIcon /> },
   { href: "/symbols", label: "จัดการหุ้น", icon: <ListIcon /> },
+  { href: "/recipients", label: "ผู้รับแจ้งเตือน", icon: <UsersIcon /> },
   { href: "/history", label: "ประวัติแจ้งเตือน", icon: <HistoryIcon /> },
 ];
 

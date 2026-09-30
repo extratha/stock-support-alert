@@ -1,12 +1,10 @@
 import { config } from "@/lib/config";
-import { listActiveUserIds } from "@/lib/db/lineUsers";
+import { listRecipientIds } from "@/lib/db/lineUsers";
 import { pushText } from "@/lib/line/client";
 
-/** Active followers, narrowed by LINE_ALLOWED_USER_IDS when configured. */
+/** Friends with push switched on (see the "ผู้รับแจ้งเตือน" page), capped by MAX_PUSH_RECIPIENTS. */
 export async function recipients(): Promise<string[]> {
-  const active = await listActiveUserIds();
-  const allowed = config.lineAllowedUserIds();
-  return allowed.length > 0 ? active.filter((id) => allowed.includes(id)) : active;
+  return listRecipientIds(config.maxPushRecipients());
 }
 
 export async function notify(texts: string | string[]): Promise<{ sent: number }> {

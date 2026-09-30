@@ -22,10 +22,9 @@ export const config = {
   apiCreditsPerMinute: () => Math.max(1, Math.floor(num("API_CREDITS_PER_MINUTE", 8))),
   /** A cached quote younger than this is reused instead of calling the API again. */
   quoteCacheTtlMinutes: () => num("QUOTE_CACHE_TTL_MINUTES", 5),
-  /** Optional comma-separated LINE userIds; when set only these receive pushes. */
-  lineAllowedUserIds: () =>
-    (process.env.LINE_ALLOWED_USER_IDS ?? "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean),
+  /**
+   * Max friends that receive push alerts (each push message counts once per recipient
+   * against LINE's monthly quota). Friends beyond this can still ask "ขอแนวรับ" for free.
+   */
+  maxPushRecipients: () => Math.max(0, Math.floor(num("MAX_PUSH_RECIPIENTS", 5))),
 };

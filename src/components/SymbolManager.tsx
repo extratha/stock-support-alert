@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { PlusIcon, SendIcon, TrashIcon } from "./icons";
@@ -104,8 +105,11 @@ export function SymbolManager({ initial, max, subscribers }: Props) {
 
       <div className="surface p-4 text-sm">
         <p>
-          ผู้รับแจ้งเตือนผ่าน LINE: <strong className="font-mono">{subscribers}</strong> คน
-          {subscribers === 0 && <span className="text-muted"> — เพิ่ม LINE OA เป็นเพื่อนเพื่อลงทะเบียน</span>}
+          ผู้รับแจ้งเตือน (push) ผ่าน LINE: <strong className="font-mono">{subscribers}</strong> คน{" "}
+          <Link href="/recipients" className="text-primary underline underline-offset-4">
+            จัดการผู้รับ
+          </Link>
+          {subscribers === 0 && <span className="text-muted"> — เปิดรับแจ้งเตือนให้อย่างน้อย 1 คนก่อน</span>}
         </p>
         <button
           disabled={busy || subscribers === 0}

@@ -30,3 +30,22 @@ export async function pushText(userIds: string[], texts: string | string[]) {
 export async function replyText(replyToken: string, texts: string | string[]) {
   await post("reply", { replyToken, messages: toMessages(texts) });
 }
+
+export interface LineProfile {
+  displayName: string;
+  pictureUrl?: string;
+}
+
+/**
+ * The Messaging API exposes the display name and picture only. It never reveals the
+ * user's LINE ID (e.g. "extratha"). Returns null when the user is not (or no longer) a friend.
+ */
+export async function getProfile(userId: string): Promise<LineProfile | null> {
+  const res = await fetch(`https://api.line.me/v2/bot/profile/${encodeURIComponent(userId)}`, {
+    headers: { Authorization: `Bearer ${requireEnv("LINE_CHANNEL_ACCESS_TOKEN")}` },
+    cache: "no-store",
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`LINE profile failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as LineProfile;
+}

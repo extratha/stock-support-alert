@@ -59,3 +59,20 @@ create table if not exists line_users (
   followed_at     timestamptz not null default now(),
   unfollowed_at   timestamptz
 );
+
+-- Later additions to line_users (idempotent).
+--  active = currently a friend of the OA;  notify = also receives push alerts (capped in the app).
+alter table line_users add column if not exists display_name text;
+alter table line_users add column if not exists picture_url text;
+alter table line_users add column if not exists label text;
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'line_users' and column_name = 'notify'
+  ) then
+    alter table line_users add column notify boolean not null default false;
+    -- keep everyone who was receiving alerts before this column existed
+    update line_users set notify = active;
+  end if;
+end $$;
