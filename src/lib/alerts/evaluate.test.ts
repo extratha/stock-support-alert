@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateTier } from "./evaluate";
+import { evaluateTier, sameScale } from "./evaluate";
 
 const now = new Date("2026-09-30T15:00:00Z");
 const minutesAgo = (m: number) => new Date(now.getTime() - m * 60_000);
@@ -37,5 +37,13 @@ describe("evaluateTier", () => {
   it("counts an earlier intraday touch when the day's low is supplied", () => {
     expect(evaluateTier({ price: 104, level, state: undefined, now })).toBe("none");
     expect(evaluateTier({ price: 104, level, state: undefined, now, low: 99.5 })).toBe("alert");
+  });
+});
+
+describe("sameScale", () => {
+  it("tells a split apart from a normal day", () => {
+    expect(sameScale(176, 178.2)).toBe(true);
+    expect(sameScale(17.6, 176)).toBe(false); // 10-for-1
+    expect(sameScale(352, 176)).toBe(false); // 1-for-2 reverse split
   });
 });

@@ -44,3 +44,12 @@ describe("deliverLateAlerts", () => {
     expect(releaseAlert).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("quoteDoubt", () => {
+  it("skips a stock whose previous close no longer matches the close its levels came from", async () => {
+    const { quoteDoubt } = await import("./checkAlerts");
+    expect(quoteDoubt(178.2, 178.2)).toBeNull();
+    expect(quoteDoubt(178.2, undefined)).toBeNull();
+    expect(quoteDoubt(1782, 178.2)).toMatch(/split/);
+  });
+});

@@ -18,6 +18,14 @@ export interface TierState {
   lastAlertAt: Date | null;
 }
 
+/**
+ * Two prices of the same thing (a stored close and the provider's "previous close") that differ by more than this
+ * are on different scales: a split or reverse split happened (the provider rescales its history, our stored levels
+ * are not), or the data is wrong. Comparing a level with a price across that gap would fire a meaningless alert.
+ */
+const SCALE_MISMATCH = 0.2;
+export const sameScale = (a: number, b: number) => Math.abs(a / b - 1) <= SCALE_MISMATCH;
+
 export type Decision = "alert" | "rearm" | "none";
 
 /**

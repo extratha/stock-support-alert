@@ -4,7 +4,7 @@ import { formatLateMessages } from "./format";
 import { findLateEvents, type PreviousLevel } from "./lateCheck";
 
 const bar = (date: string, low: number, close: number): Candle => ({ date, open: close, high: close, low, close, volume: 1 });
-const major: PreviousLevel = { tier: "major", method: "ma200", price: 100, zoneLow: null, asOf: "2026-09-28" };
+const major: PreviousLevel = { tier: "major", method: "ma200", price: 100, zoneLow: null, asOf: "2026-09-28", refClose: 106 };
 const opts = (armed: boolean) => ({ tiers: ["major" as const], isArmed: () => armed });
 
 describe("findLateEvents", () => {
@@ -35,6 +35,11 @@ describe("findLateEvents", () => {
     expect(findLateEvents("X", [minor], [before, bar("2026-09-29", 90, 91)], opts(true))).toEqual([]);
     expect(findLateEvents("X", [major], [before, bar("2026-09-29", 101, 103)], opts(true))).toEqual([]);
     expect(findLateEvents("X", [major], [bar("2026-09-28", 90, 91)], opts(true))).toEqual([]);
+  });
+
+  it("skips a stock whose history was rescaled since (a split): old levels and new prices don't compare", () => {
+    // 10-for-1 split: the provider now shows the old bar at 10.6, the stored levels are still around 100
+    expect(findLateEvents("X", [major], [bar("2026-09-28", 10.5, 10.6), bar("2026-09-29", 10.2, 10.4)], opts(true))).toEqual([]);
   });
 
   it("covers every day since the levels were computed (a missed recalculation)", () => {

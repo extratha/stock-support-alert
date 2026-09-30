@@ -5,6 +5,7 @@ export interface CachedQuote {
   symbol: string;
   price: number;
   dayLow: number | null;
+  prevClose: number | null;
   quoteTime: Date;
   fetchedAt: Date;
 }
@@ -12,7 +13,7 @@ export interface CachedQuote {
 export async function listCachedQuotes(symbols: string[]): Promise<CachedQuote[]> {
   if (symbols.length === 0) return [];
   return sql()<CachedQuote[]>`
-    select symbol, price::float8 as price, day_low::float8 as "dayLow", quote_time as "quoteTime", fetched_at as "fetchedAt"
+    select symbol, price::float8 as price, day_low::float8 as "dayLow", prev_close::float8 as "prevClose", quote_time as "quoteTime", fetched_at as "fetchedAt"
     from quotes where symbol in ${sql()(symbols)}`;
 }
 

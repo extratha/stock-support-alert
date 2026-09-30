@@ -6,6 +6,8 @@ export interface QuoteLookup {
   prices: Record<string, number>;
   /** Today's low per symbol (only where the provider supplied it). */
   lows: Record<string, number>;
+  /** the provider's previous close, to catch a split before comparing with stored levels */
+  prevCloses: Record<string, number>;
   errors: Record<string, string>;
   fetched: number;
   cached: number;
@@ -24,11 +26,13 @@ export async function getQuotes(symbols: string[], now: Date): Promise<QuoteLook
 
   const prices: Record<string, number> = {};
   const lows: Record<string, number> = {};
+  const prevCloses: Record<string, number> = {};
   const fresh = new Set<string>();
   for (const q of cachedRows) {
     if (now.getTime() - q.fetchedAt.getTime() < ttlMs) {
       prices[q.symbol] = q.price;
       if (q.dayLow !== null) lows[q.symbol] = q.dayLow;
+      if (q.prevClose !== null) prevCloses[q.symbol] = q.prevClose;
       fresh.add(q.symbol);
     }
   }
@@ -44,9 +48,10 @@ export async function getQuotes(symbols: string[], now: Date): Promise<QuoteLook
     for (const q of Object.values(result.data)) {
       prices[q.symbol] = q.price;
       if (q.dayLow !== null) lows[q.symbol] = q.dayLow;
+      if (q.previousClose !== null) prevCloses[q.symbol] = q.previousClose;
     }
     Object.assign(errors, result.errors);
   }
 
-  return { prices, lows, errors, fetched: stale.length, cached: fresh.size, remaining: deferred.length };
+  return { prices, lows, prevCloses, errors, fetched: stale.length, cached: fresh.size, remaining: deferred.length };
 }

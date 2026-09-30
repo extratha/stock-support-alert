@@ -1,6 +1,6 @@
 import { config } from "@/lib/config";
 import { formatAlertMessages, formatLateMessages, type AlertItem, type LateItem } from "@/lib/alerts/format";
-import { evaluateTier } from "@/lib/alerts/evaluate";
+import { evaluateTier, sameScale } from "@/lib/alerts/evaluate";
 import { claimAlert, loadStates, recordAlerts, rearm, releaseAlert, stateKey } from "@/lib/db/alerts";
 import { listSupports } from "@/lib/db/supports";
 import { listSymbols } from "@/lib/db/symbols";
@@ -45,6 +45,18 @@ export function skipReason(
   return undefined;
 }
 
+/**
+ * Why a quote must not be compared with the stored levels: its previous close is on another scale than the close the
+ * levels came from. That is a split since the last recalculation (a 10-for-1 split would read as a 90% fall through
+ * every level), or bad data. The evening recalculation rebuilds the levels on the new scale.
+ */
+export function quoteDoubt(refClose: number, prevClose: number | undefined): string | null {
+  if (prevClose !== undefined && !sameScale(prevClose, refClose)) {
+    return `previous close ${prevClose} vs ${refClose} the levels were computed from (split?): skipped until the next recalculation`;
+  }
+  return null;
+}
+
 /** One tick: quote every tracked symbol, compare with cached levels, push LINE alerts. */
 export async function checkAlerts(now: Date, opts: { force?: boolean; mode?: CheckMode } = {}): Promise<CheckSummary> {
   const daily = opts.mode === "daily";
@@ -69,6 +81,11 @@ export async function checkAlerts(now: Date, opts: { force?: boolean; mode?: Che
     if (!alertTiers.includes(s.tier)) continue;
     const price = quotes.prices[s.symbol];
     if (price === undefined) continue;
+    const doubt = quoteDoubt(s.refClose, quotes.prevCloses[s.symbol]);
+    if (doubt) {
+      summary.errors[s.symbol] = doubt;
+      continue;
+    }
     const state = states.get(stateKey(s.symbol, s.tier));
 
     const decision = evaluateTier({ price, level: s.price, state, now, low: daily ? quotes.lows[s.symbol] : undefined });

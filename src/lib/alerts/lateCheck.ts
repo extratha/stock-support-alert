@@ -1,5 +1,5 @@
 import type { Candle, Method, Tier } from "@/lib/support/types";
-import { DEFAULT_RULES } from "./evaluate";
+import { DEFAULT_RULES, sameScale } from "./evaluate";
 
 /**
  * The after-close pass. The live check runs once a day (13:30 New York) and compares the price with levels fixed
@@ -14,8 +14,9 @@ export interface PreviousLevel {
   method: Method;
   price: number;
   zoneLow: number | null;
-  /** the last bar these levels were computed from */
+  /** the last bar these levels were computed from, and its close */
   asOf: string;
+  refClose: number;
 }
 
 export interface LateEvent {
@@ -44,6 +45,9 @@ export function findLateEvents(
   const events: LateEvent[] = [];
   for (const p of previous) {
     if (!tiers.includes(p.tier)) continue;
+    // the provider rescaled its history (split) since the levels were computed: old and new prices don't compare
+    const known = candles.find((c) => c.date === p.asOf);
+    if (known && !sameScale(known.close, p.refClose)) continue;
     const fresh = candles.filter((c) => c.date > p.asOf);
     const touch = fresh.find((c) => c.low <= p.price * (1 + tolerance));
     if (!touch) continue;
