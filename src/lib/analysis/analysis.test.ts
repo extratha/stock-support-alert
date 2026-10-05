@@ -3,7 +3,7 @@ import type { ProfileData } from "@/lib/profile/describe";
 import type { TrackedSymbol } from "@/lib/db/symbols";
 import type { TrackSummary } from "@/lib/support/track";
 import { AnalysisParseError, parseAnalysis } from "./parse";
-import { buildStockInput, buildUserPrompt, SYSTEM_PROMPT } from "./prompt";
+import { buildStockInput, buildUserPrompt, MANUAL_PROMPT_RULES, SYSTEM_PROMPT } from "./prompt";
 import { GOALS, parseGoals } from "./types";
 
 describe("parseGoals", () => {
@@ -142,5 +142,12 @@ describe("prompts", () => {
     expect(SYSTEM_PROMPT).toMatch(/Do not predict/);
     expect(SYSTEM_PROMPT).toMatch(/NOT been shown to beat/);
     expect(SYSTEM_PROMPT).toMatch(/at most 5/);
+  });
+
+  it("the copy-to-chat version keeps every rule but asks for readable Thai instead of JSON", () => {
+    for (const rule of [/ONLY the JSON data/, /Never invent/, /Do not predict/, /NOT been shown to beat/]) expect(MANUAL_PROMPT_RULES).toMatch(rule);
+    expect(MANUAL_PROMPT_RULES).not.toMatch(/Reply with ONE JSON object/);
+    expect(MANUAL_PROMPT_RULES).toMatch(/Answer in readable Thai/);
+    expect(SYSTEM_PROMPT).toMatch(/Reply with ONE JSON object/);
   });
 });

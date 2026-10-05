@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/apiFetch";
 import { formatDateTime } from "@/lib/format/datetime";
 import { GOALS, type AnalysisView, type GoalId } from "@/lib/analysis/types";
-import { SparklesIcon } from "./icons";
+import { CheckIcon, CopyIcon, SparklesIcon } from "./icons";
 import { Spinner } from "./Spinner";
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
@@ -100,6 +100,33 @@ export function AnalysisPanel({
   const [used, setUsed] = useState(initialUsed);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copy, setCopy] = useState<"idle" | "busy" | "copied">("idle");
+
+  useEffect(() => {
+    if (copy !== "copied") return;
+    const t = setTimeout(() => setCopy("idle"), 2500);
+    return () => clearTimeout(t);
+  }, [copy]);
+
+  /** The same prompt and data, to paste into any AI chat: no AI call here, so it works without settings or quota. */
+  async function copyPrompt() {
+    setCopy("busy");
+    setError(null);
+    try {
+      const res = await apiFetch("/api/analysis/prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goals: [...goals] }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { text?: string; error?: string };
+      if (!res.ok || !body.text) throw new Error(body.error ?? `สร้างข้อความไม่สำเร็จ (HTTP ${res.status})`);
+      await navigator.clipboard.writeText(body.text);
+      setCopy("copied");
+    } catch (err) {
+      setCopy("idle");
+      setError(err instanceof Error ? err.message : "คัดลอกไม่สำเร็จ");
+    }
+  }
 
   const ready = missing.length === 0;
   const left = Math.max(0, limit - used);
@@ -189,6 +216,16 @@ export function AnalysisPanel({
         >
           {busy ? <Spinner /> : <SparklesIcon />}
           {busy ? "กำลังวิเคราะห์…" : "วิเคราะห์ด้วย AI"}
+        </button>
+        <button
+          type="button"
+          onClick={copyPrompt}
+          disabled={busy || copy === "busy"}
+          title="คัดลอกคำสั่งและข้อมูลชุดเดียวกัน ไปวางในแชท AI ที่ใช้อยู่ (ไม่ใช้โควตา)"
+          className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm transition-colors duration-150 hover:border-primary/50 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {copy === "busy" ? <Spinner /> : copy === "copied" ? <CheckIcon /> : <CopyIcon />}
+          <span aria-live="polite">{copy === "copied" ? "คัดลอกแล้ว วางในแชท AI ได้เลย" : "คัดลอกไปถาม AI เอง"}</span>
         </button>
         <span className="text-xs text-muted">
           วันนี้ใช้ไปแล้ว <span className="font-mono tabular-nums">{used}/{limit}</span> ครั้ง

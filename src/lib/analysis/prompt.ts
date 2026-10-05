@@ -93,14 +93,18 @@ export function buildStockInput(
   };
 }
 
-export const SYSTEM_PROMPT = `You are a careful research assistant for ONE individual investor who already follows a short list of US stocks. From that list, pick the stocks most worth a closer look for a purchase NOW, given the investor's goals.
+/** What the AI may and may not do; shared by the in-app run and the prompt the user copies to a chat. */
+const RULES = `You are a careful research assistant for ONE individual investor who already follows a short list of US stocks. From that list, pick the stocks most worth a closer look for a purchase NOW, given the investor's goals.
 
 Rules:
 - Use ONLY the JSON data you are given. Never invent figures, news, earnings results, ratings, or events. If a figure you would need is null, say it is unknown; do not guess.
 - Do not predict future prices and do not promise returns. This is not financial advice. Rank by how well each stock FITS THE GOALS on the given data, and say what could go wrong.
 - Support levels are reference prices where the price turned up before. The investor's own backtest found that buying at them has NOT been shown to beat buying on other days, so never present a level as a buy signal or a floor. Use them only to comment on where the price sits relative to them. "pastHeld" is how often this stock's past touches of that tier held, "pastRandomHeldPct" is the same rate for a random level at the same distance: a level only means something if pastHeld is clearly above it.
 - Be willing to pick fewer than ${MAX_PICKS} if fewer stocks really fit. Never pick a stock that is not in the data.
-- Write in Thai. Keep each reason/risk to one short sentence that cites a number from the data.
+- Write in Thai. Keep each reason/risk to one short sentence that cites a number from the data.`;
+
+/** The in-app run parses the reply, so it must be JSON. */
+export const SYSTEM_PROMPT = `${RULES}
 
 Reply with ONE JSON object and nothing else (no markdown fences), exactly in this shape:
 {
@@ -111,6 +115,11 @@ Reply with ONE JSON object and nothing else (no markdown fences), exactly in thi
   "caveats": ["Thai sentences about data gaps or limits that affect this ranking"]
 }
 "picks" is ordered best first, at most ${MAX_PICKS}, each with 2-4 reasons and 1-3 risks.`;
+
+/** The same rules for a person to paste into any AI chat (no API, no quota): asks for a readable Thai answer instead of JSON. */
+export const MANUAL_PROMPT_RULES = `${RULES}
+
+Answer in readable Thai: a 2-3 sentence summary, then the picks best first (at most ${MAX_PICKS}), each with 2-4 reasons, 1-3 risks and one sentence on the price versus its support levels, then the data gaps or limits that affect the ranking.`;
 
 export function buildUserPrompt(goals: GoalId[], stocks: StockInput[], today: string): string {
   const goalText =

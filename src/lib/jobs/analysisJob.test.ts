@@ -25,7 +25,7 @@ const reply = (model = "m", skipped: { model: string; reason: string }[] = []) =
 const chat = vi.fn<(a: { system: string; user: string; models?: string[] }) => Promise<{ text: string; model: string; skipped: { model: string; reason: string }[] }>>(async () => reply());
 vi.mock("@/lib/ai/client", async (orig) => ({ ...(await orig<typeof import("@/lib/ai/client")>()), chat }));
 
-const { runAnalysis, AnalysisError } = await import("./analysis");
+const { runAnalysis, manualPrompt, AnalysisError } = await import("./analysis");
 const { AiError } = await import("@/lib/ai/client");
 
 const NOW = new Date("2026-09-30T14:00:00Z");
@@ -144,5 +144,28 @@ describe("runAnalysis: slow live prices", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("manualPrompt", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it("is the rules plus the same data with current prices, and needs no AI settings, reserves nothing, calls no AI", async () => {
+    vi.stubEnv("AI_API_KEY", "");
+    vi.stubEnv("AI_MODEL", "");
+    const text = await manualPrompt(["dividend"], NOW);
+    expect(text).toMatch(/Answer in readable Thai/);
+    expect(text).toContain('"symbol":"NVDA","price":182.5');
+    expect(text).toContain("Dividend income");
+    expect(startAnalysis).not.toHaveBeenCalled();
+    expect(chat).not.toHaveBeenCalled();
+  });
+
+  it("says so when there is nothing to analyse", async () => {
+    listTrackedSymbols.mockResolvedValueOnce([]);
+    await expect(manualPrompt([], NOW)).rejects.toMatchObject({ code: "no_symbols" });
   });
 });
