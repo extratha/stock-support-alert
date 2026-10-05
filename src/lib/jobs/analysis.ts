@@ -95,7 +95,7 @@ async function loadData() {
 
 /**
  * What the AI gets per stock, with the current price: the shared live cache (Finnhub -> Yahoo), else the price saved by
- * the scheduled check. Prices are capped at 8 s so they plus the AI call always fit in the function's 60 s (usually
+ * the scheduled check. Prices are capped at 8 s so they plus the AI call always fit in the function's 300 s (usually
  * instant: the cache is shared with the dashboard).
  */
 async function stockInputs({ tracked, profiles, tests }: Data, day: string): Promise<StockInput[]> {

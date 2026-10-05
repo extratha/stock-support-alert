@@ -38,3 +38,17 @@ describe("config.ai.models", () => {
     }
   });
 });
+
+describe("config.ai.timeoutMs", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it("defaults to the most that fits Vercel's 300 s (280 s), and is clamped to 5-280 s", () => {
+    vi.stubEnv("AI_TIMEOUT_SECONDS", "");
+    expect(config.ai.timeoutMs()).toBe(280_000);
+    vi.stubEnv("AI_TIMEOUT_SECONDS", "900");
+    expect(config.ai.timeoutMs()).toBe(280_000);
+    vi.stubEnv("AI_TIMEOUT_SECONDS", "1");
+    expect(config.ai.timeoutMs()).toBe(5_000);
+    vi.stubEnv("AI_TIMEOUT_SECONDS", "90");
+    expect(config.ai.timeoutMs()).toBe(90_000);
+  });
+});

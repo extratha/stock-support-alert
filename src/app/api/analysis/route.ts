@@ -5,7 +5,8 @@ import { nyToday } from "@/lib/market/calendar";
 import { AnalysisError, runAnalysis, type AnalysisErrorCode } from "@/lib/jobs/analysis";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+/** Vercel's limit with Fluid compute (Hobby and Pro); the AI budget (AI_TIMEOUT_SECONDS, at most 280 s) fits inside. */
+export const maxDuration = 300;
 
 const STATUS: Record<AnalysisErrorCode, number> = {
   bad_request: 400,

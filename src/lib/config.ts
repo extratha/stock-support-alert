@@ -62,8 +62,11 @@ export const config = {
     },
     /** Runs per New York day, failed ones included (each costs quota with the provider). */
     dailyLimit: () => Math.max(1, Math.floor(num("AI_DAILY_LIMIT", 10))),
-    /** The whole run (prices up to 8 s + this) must fit in the serverless function's 60 s. */
-    timeoutMs: () => Math.min(50, Math.max(5, num("AI_TIMEOUT_SECONDS", 40))) * 1000,
+    /**
+     * Time for the AI part of a run (every model and retry together). The function may run 300 s (Vercel, Fluid
+     * compute); prices take up to 8 s and the database a few more, so 280 s is the most that always fits.
+     */
+    timeoutMs: () => Math.min(280, Math.max(5, num("AI_TIMEOUT_SECONDS", 280))) * 1000,
     /** Names of the variables still missing (empty = ready). */
     missing: (): string[] => [
       ...(process.env.AI_API_KEY?.trim() ? [] : ["AI_API_KEY"]),

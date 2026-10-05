@@ -252,7 +252,7 @@ export function AnalysisPanel({
       </div>
 
       <div aria-live="polite" className="min-h-5">
-        {busy && <p className="text-sm text-muted">AI กำลังอ่านข้อมูลหุ้นทั้งหมด อาจใช้เวลาถึง 1 นาที</p>}
+        {busy && <p className="text-sm text-muted">AI กำลังอ่านข้อมูลหุ้นทั้งหมด ปกติไม่เกิน 1 นาที แต่ถ้าผู้ให้บริการช้าหรือต้องสลับโมเดล อาจนานถึงราว 5 นาที อย่าปิดหน้านี้</p>}
         {error && <p className="text-sm text-danger">{error}</p>}
       </div>
 
