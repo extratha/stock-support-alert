@@ -31,6 +31,26 @@ export function chatCompletionsUrl(baseUrl: string): string {
 
 type Json = Record<string, unknown>;
 
+/**
+ * The reason the provider gave, for the admin who is configuring this ("API key not valid", "model not found"...):
+ * `error.message` of a JSON reply (OpenAI-style object or Google's one-element array), or a short plain-text body.
+ * Shortened, and anything shaped like a key (and the configured key itself) is blanked out.
+ */
+export function providerReason(body: string, apiKey = config.ai.apiKey()): string {
+  let text = "";
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    const first = (Array.isArray(parsed) ? parsed[0] : parsed) as Json | undefined;
+    const err = first?.error as Json | string | undefined;
+    const message = typeof err === "string" ? err : err?.message ?? first?.message;
+    if (typeof message === "string") text = message;
+  } catch {
+    if (!body.trimStart().startsWith("<")) text = body; // an HTML error page is no help
+  }
+  if (apiKey) text = text.split(apiKey).join("***");
+  return text.replace(/[A-Za-z0-9_-]{32,}/g, "***").replace(/\s+/g, " ").trim().slice(0, 200);
+}
+
 /** OpenAI-style reply: `choices[0].message.content` is a string (some providers send a list of text parts). */
 function contentOf(json: Json): string {
   const choice = (Array.isArray(json.choices) ? json.choices[0] : undefined) as Json | undefined;
@@ -73,12 +93,17 @@ export async function chat({ system, user }: { system: string; user: string }): 
   }
 
   if (!res.ok) {
-    // the provider's text goes to the server log only (it can be long, and is not for the user)
-    console.error("AI request failed", res.status, (await res.text().catch(() => "")).slice(0, 300));
-    if (res.status === 429) throw new AiError("ผู้ให้บริการ AI จำกัดจำนวนครั้ง (rate limit / โควตาหมด) ลองใหม่ภายหลัง", "rate_limit", 429);
-    if (res.status === 401 || res.status === 403) throw new AiError("ผู้ให้บริการ AI ปฏิเสธ key (ตรวจ AI_API_KEY)", "http", res.status);
-    if (res.status === 404 || res.status === 400) throw new AiError("ผู้ให้บริการ AI ไม่รู้จักโมเดลหรือคำขอไม่ถูกต้อง (ตรวจ AI_MODEL / AI_BASE_URL)", "http", res.status);
-    throw new AiError(`ผู้ให้บริการ AI ตอบ error (HTTP ${res.status})`, "http", res.status);
+    const raw = await res.text().catch(() => "");
+    console.error("AI request failed", res.status, raw.slice(0, 300));
+    const reason = providerReason(raw);
+    const why = reason ? ` — ผู้ให้บริการแจ้งว่า: "${reason}"` : "";
+    if (res.status === 429) throw new AiError(`ผู้ให้บริการ AI จำกัดจำนวนครั้ง (rate limit / โควตาหมด) ลองใหม่ภายหลัง${why}`, "rate_limit", 429);
+    if (res.status === 401 || res.status === 403) throw new AiError(`ผู้ให้บริการ AI ปฏิเสธ key (ตรวจ AI_API_KEY)${why}`, "http", res.status);
+    if (res.status === 404 || res.status === 400) {
+      // Google answers 400 for a wrong key, so the key is the first thing to check, then the model and the URL
+      throw new AiError(`ผู้ให้บริการ AI ปฏิเสธคำขอ (HTTP ${res.status}) ตรวจ AI_API_KEY, AI_MODEL, AI_BASE_URL${why}`, "http", res.status);
+    }
+    throw new AiError(`ผู้ให้บริการ AI ตอบ error (HTTP ${res.status})${why}`, "http", res.status);
   }
 
   const text = contentOf((await res.json().catch(() => ({}))) as Json).trim();

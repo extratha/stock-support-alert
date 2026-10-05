@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AiError, chat, chatCompletionsUrl } from "./client";
+import { AiError, chat, chatCompletionsUrl, providerReason } from "./client";
 
 const ok = (content: unknown) => new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200 });
 
@@ -49,7 +49,27 @@ describe("chat", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("maps provider failures to short Thai messages that never include the provider's text or the key", async () => {
+  it("shows the reason the provider gave (Google's one-element array, or an OpenAI-style object) and checks the key first on a 400", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify([{ error: { code: 400, message: "API key not valid. Please pass a valid API key.", status: "INVALID_ARGUMENT" } }]), { status: 400 }),
+    );
+    const err = await chat({ system: "S", user: "U" }).catch((e) => e);
+    expect(err.message).toContain("HTTP 400");
+    expect(err.message).toContain("AI_API_KEY");
+    expect(err.message).toContain('"API key not valid. Please pass a valid API key."');
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: { message: "model `x` not found" } }), { status: 404 }));
+    await expect(chat({ system: "S", user: "U" })).rejects.toMatchObject({ message: expect.stringContaining("model `x` not found") });
+  });
+
+  it("never lets a key through in the reason: the configured key and anything key-shaped are blanked, HTML pages are ignored", () => {
+    expect(providerReason(JSON.stringify({ error: { message: "bad key sk-secret and AIzaSyA1234567890abcdefghijklmnopqrstuv" } }), "sk-secret")).toBe("bad key *** and ***");
+    expect(providerReason("<html>502 Bad Gateway</html>", "sk-secret")).toBe("");
+    expect(providerReason("plain text reason", "sk-secret")).toBe("plain text reason");
+    expect(providerReason("x".repeat(500), "")).toHaveLength(0 + "***".length);
+    expect(providerReason(JSON.stringify({ error: { message: "word ".repeat(100) } }), "").length).toBeLessThanOrEqual(200);
+  });
+
+  it("maps provider failures to short Thai messages that never include the key", async () => {
     fetchMock.mockResolvedValue(new Response("bad key sk-secret", { status: 401 }));
     const err = await chat({ system: "S", user: "U" }).catch((e) => e);
     expect(err).toBeInstanceOf(AiError);
