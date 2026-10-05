@@ -7,6 +7,8 @@ export interface Fundamentals {
   /** percent */
   netMargin: number | null;
   beta: number | null;
+  /** percent per year (1.6 = 1.6% of the price); null when the company pays none or Finnhub has no figure */
+  dividendYield: number | null;
   nextEarnings: string | null; // YYYY-MM-DD
   earningsHour: string | null; // bmo / amc / dmh
 }
@@ -15,7 +17,9 @@ type Json = Record<string, unknown>;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const TIMEOUT_MS = 5000;
 
-export function parseMetric(json: Json): Pick<Fundamentals, "pe" | "forwardPe" | "revenueGrowth" | "netMargin" | "beta"> {
+export function parseMetric(
+  json: Json,
+): Pick<Fundamentals, "pe" | "forwardPe" | "revenueGrowth" | "netMargin" | "beta" | "dividendYield"> {
   const m = (json.metric ?? {}) as Json;
   return {
     pe: num(m.peTTM) ?? num(m.peBasicExclExtraTTM),
@@ -23,6 +27,7 @@ export function parseMetric(json: Json): Pick<Fundamentals, "pe" | "forwardPe" |
     revenueGrowth: num(m.revenueGrowthTTMYoy),
     netMargin: num(m.netProfitMarginTTM),
     beta: num(m.beta),
+    dividendYield: num(m.dividendYieldIndicatedAnnual) ?? num(m.currentDividendYieldTTM),
   };
 }
 

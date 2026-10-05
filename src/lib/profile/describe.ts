@@ -16,7 +16,7 @@ export const toProfileData = (p: StockProfile): ProfileData => ({
  * "buy", "cheap" or "good". `caution` only marks figures that mean more risk or a known event ahead.
  */
 interface ProfileLine {
-  key: "pe" | "growth" | "margin" | "beta" | "fromHigh" | "drawdown" | "earnings";
+  key: "pe" | "growth" | "margin" | "dividend" | "beta" | "fromHigh" | "drawdown" | "earnings";
   label: string;
   value: string;
   meaning: string;
@@ -106,6 +106,23 @@ function describeMargin(p: ProfileData): ProfileLine | null {
   return { key: "margin", label: "อัตรากำไรสุทธิ", value: `${m.toFixed(0)}%`, meaning: `${per100} — ${level} (ระดับที่ถือว่าสูง/ต่ำต่างกันไปตามอุตสาหกรรม)`, caution };
 }
 
+function describeDividend(p: ProfileData): ProfileLine | null {
+  const y = p.dividendYield ?? null;
+  if (y === null || y <= 0) return null; // no figure = pays none or unknown: better to show nothing than guess
+  let level: string;
+  if (y < 1) level = "ปันผลน้อย";
+  else if (y < 3) level = "ปันผลระดับปานกลาง";
+  else if (y < 6) level = "ปันผลค่อนข้างสูง";
+  else level = "ปันผลสูงมาก — มักเกิดเมื่อราคาหุ้นลงมาก ควรดูว่าบริษัทจ่ายต่อเนื่องไหวหรือไม่";
+  return {
+    key: "dividend",
+    label: "ผลตอบแทนปันผล",
+    value: `${y.toFixed(1)}%`,
+    meaning: `ถือหุ้นมูลค่า $100 ได้ปันผลราว $${y.toFixed(1)} ต่อปี (ตามอัตราจ่ายล่าสุด ไม่รับประกันว่าจะจ่ายเท่าเดิม) — ${level}`,
+    caution: y >= 8,
+  };
+}
+
 function describeBeta(p: ProfileData): ProfileLine | null {
   const b = p.beta ?? null;
   if (b === null) return null;
@@ -191,6 +208,7 @@ export function describeProfile(p: ProfileData | undefined, price: number | null
     describePe(p),
     describeGrowth(p),
     describeMargin(p),
+    describeDividend(p),
     describeBeta(p),
     describeFromHigh(p, price),
     describeDrawdown(p, today),

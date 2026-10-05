@@ -6,7 +6,7 @@ const fetchFundamentals = vi.fn();
 vi.mock("@/lib/db/profiles", () => ({ saveFundamentals, symbolsNeedingFundamentals }));
 vi.mock("@/lib/profile/finnhub", () => ({ fetchFundamentals }));
 
-const f = { pe: 20, forwardPe: 18, revenueGrowth: 10, netMargin: 15, beta: 1.1, nextEarnings: null, earningsHour: null };
+const f = { pe: 20, forwardPe: 18, revenueGrowth: 10, netMargin: 15, beta: 1.1, dividendYield: null, nextEarnings: null, earningsHour: null };
 
 beforeEach(() => {
   vi.clearAllMocks();

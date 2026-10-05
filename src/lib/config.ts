@@ -13,6 +13,8 @@ const num = (name: string, fallback: number) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
+const DEFAULT_AI_BASE_URL = "https://openrouter.ai/api/v1";
+
 export const config = {
   /** How many symbols may be tracked. Larger lists are fetched in rate-limited batches. */
   maxTrackedSymbols: () => num("MAX_TRACKED_SYMBOLS", 20),
@@ -39,6 +41,30 @@ export const config = {
    * Tiers that send LINE alerts. Default: only "major" (แนวรับสำคัญ), the only tier the backtest found better than
    * buying on a random day. ALERT_TIERS=minor,intermediate,major restores all three. Unknown names are ignored.
    */
+  /**
+   * AI stock ranking (the "วิเคราะห์ด้วย AI" page). Any provider with an OpenAI-compatible
+   * `POST {AI_BASE_URL}/chat/completions` works (OpenRouter, Gemini, Groq, OpenAI, ...). The key is a secret.
+   */
+  ai: {
+    baseUrl: () => (process.env.AI_BASE_URL?.trim() || DEFAULT_AI_BASE_URL).replace(/\/+$/, ""),
+    apiKey: () => process.env.AI_API_KEY?.trim() ?? "",
+    model: () => process.env.AI_MODEL?.trim() ?? "",
+    /** Sent only when set: some newer models reject any value but their default. */
+    temperature: () => {
+      const raw = process.env.AI_TEMPERATURE;
+      const n = raw === undefined || raw.trim() === "" ? NaN : Number(raw);
+      return Number.isFinite(n) ? Math.min(2, Math.max(0, n)) : null;
+    },
+    /** Runs per New York day, failed ones included (each costs quota with the provider). */
+    dailyLimit: () => Math.max(1, Math.floor(num("AI_DAILY_LIMIT", 10))),
+    /** The whole run (prices up to 8 s + this) must fit in the serverless function's 60 s. */
+    timeoutMs: () => Math.min(50, Math.max(5, num("AI_TIMEOUT_SECONDS", 40))) * 1000,
+    /** Names of the variables still missing (empty = ready). */
+    missing: (): string[] => [
+      ...(process.env.AI_API_KEY?.trim() ? [] : ["AI_API_KEY"]),
+      ...(process.env.AI_MODEL?.trim() ? [] : ["AI_MODEL"]),
+    ],
+  },
   alertTiers: (): Tier[] => {
     const raw = process.env.ALERT_TIERS?.split(",").map((t) => t.trim()).filter((t): t is Tier => (TIERS as readonly string[]).includes(t));
     return raw && raw.length > 0 ? raw : ["major"];

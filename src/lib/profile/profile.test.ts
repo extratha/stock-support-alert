@@ -38,8 +38,13 @@ describe("Finnhub parsers", () => {
       revenueGrowth: 83.4,
       netMargin: 63.7,
       beta: 2.2,
+      dividendYield: null,
     });
-    expect(parseMetric({ metric: { beta: 0.8 } })).toEqual({ pe: null, forwardPe: null, revenueGrowth: null, netMargin: null, beta: 0.8 });
+    expect(parseMetric({ metric: { beta: 0.8 } })).toEqual({
+      pe: null, forwardPe: null, revenueGrowth: null, netMargin: null, beta: 0.8, dividendYield: null,
+    });
+    expect(parseMetric({ metric: { dividendYieldIndicatedAnnual: 0.03, currentDividendYieldTTM: 0.5 } }).dividendYield).toBe(0.03);
+    expect(parseMetric({ metric: { currentDividendYieldTTM: 2.4 } }).dividendYield).toBe(2.4);
     expect(parseMetric({})).toMatchObject({ pe: null, beta: null });
   });
   it("picks the earliest earnings date that is today or later", () => {
@@ -57,6 +62,7 @@ const base: ProfileData = {
   revenueGrowth: 83.4,
   netMargin: 63.7,
   beta: 2.2,
+  dividendYield: 0.03,
   nextEarnings: "2026-11-17",
   earningsHour: "amc",
   lastClose: 227.21,
@@ -74,9 +80,9 @@ const line = (p: Partial<ProfileData>, key: string, price?: number | null, today
   view(p, price, today).lines.find((l) => l.key === key);
 
 describe("describeProfile: plain-language meaning", () => {
-  it("shows all seven figures in a fixed order with a footnote naming the sources", () => {
+  it("shows all eight figures in a fixed order with a footnote naming the sources", () => {
     const v = view({});
-    expect(v.lines.map((l) => l.key)).toEqual(["pe", "growth", "margin", "beta", "fromHigh", "drawdown", "earnings"]);
+    expect(v.lines.map((l) => l.key)).toEqual(["pe", "growth", "margin", "dividend", "beta", "fromHigh", "drawdown", "earnings"]);
     expect(v.footnote).toContain("Finnhub");
     expect(v.footnote).toContain("ไม่ใช่คำแนะนำการลงทุน");
   });
@@ -189,5 +195,21 @@ describe("profileText", () => {
     }
     expect(text).toContain("ความผันผวน (Beta): 2.2 [ควรระวัง]");
     expect(text).toContain(v.footnote!);
+  });
+});
+
+describe("describeProfile: dividend", () => {
+  it("explains the yield in dollars per $100 and flags an unusually high one", () => {
+    const d = line({ dividendYield: 2.4 }, "dividend")!;
+    expect(d.value).toBe("2.4%");
+    expect(d.meaning).toContain("$100 ได้ปันผลราว $2.4 ต่อปี");
+    expect(d.meaning).toContain("ปันผลระดับปานกลาง");
+    expect(d.caution).toBe(false);
+    expect(line({ dividendYield: 9 }, "dividend")).toMatchObject({ caution: true });
+    expect(line({ dividendYield: 0.4 }, "dividend")!.meaning).toContain("ปันผลน้อย");
+  });
+  it("shows nothing when there is no figure (pays none, or unknown): nothing is guessed", () => {
+    expect(line({ dividendYield: null }, "dividend")).toBeUndefined();
+    expect(line({ dividendYield: 0 }, "dividend")).toBeUndefined();
   });
 });

@@ -152,3 +152,30 @@ create table if not exists job_runs (
   last_day     date not null,
   finished_at  timestamptz not null default now()
 );
+
+-- Dividend yield (percent per year), from Finnhub. Added after the first release: when the column is created,
+-- fundamentals are marked stale once so the next daily job fills it in without waiting for them to age.
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'stock_profiles' and column_name = 'dividend_yield'
+  ) then
+    alter table stock_profiles add column dividend_yield double precision;
+    update stock_profiles set fundamentals_at = null;
+  end if;
+end $$;
+
+-- One row per run of the AI stock ranking (src/lib/jobs/analysis.ts). The row is created BEFORE the provider is called
+-- and counts toward the daily limit even when the call fails, because every call costs quota with the provider.
+create table if not exists ai_analyses (
+  id          bigserial primary key,
+  day         date not null,                 -- New York date of the run
+  created_at  timestamptz not null default now(),
+  goals       text not null default '',      -- comma separated goal ids
+  model       text not null,
+  status      text not null default 'pending' check (status in ('pending', 'ok', 'failed')),
+  result      jsonb,                         -- summary, picks, caveats, universe (status ok)
+  error       text                           -- user-safe message (status failed)
+);
+create index if not exists ai_analyses_day_idx on ai_analyses (day);

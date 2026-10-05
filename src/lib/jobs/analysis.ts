@@ -1,0 +1,94 @@
+import { AiError, chat } from "@/lib/ai/client";
+import { buildStockInput, buildUserPrompt, SYSTEM_PROMPT } from "@/lib/analysis/prompt";
+import { AnalysisParseError, parseAnalysis } from "@/lib/analysis/parse";
+import type { AnalysisPick, AnalysisView, GoalId } from "@/lib/analysis/types";
+import { config } from "@/lib/config";
+import { finishAnalysis, getAnalysis, startAnalysis } from "@/lib/db/analyses";
+import { listProfiles } from "@/lib/db/profiles";
+import { listSupportTests } from "@/lib/db/supports";
+import { listTrackedSymbols } from "@/lib/db/symbols";
+import { nyToday } from "@/lib/market/calendar";
+import { withTimeout } from "@/lib/timeout";
+import { toProfileData } from "@/lib/profile/describe";
+import { summarizeTrack } from "@/lib/support/track";
+import { getLivePrices } from "./livePrices";
+
+const PRICE_BUDGET_MS = 8000;
+
+export type AnalysisErrorCode = "not_configured" | "no_symbols" | "limit" | "timeout" | "ai" | "parse";
+
+/** `message` is user-safe (shown on the page). */
+export class AnalysisError extends Error {
+  constructor(
+    message: string,
+    readonly code: AnalysisErrorCode,
+  ) {
+    super(message);
+    this.name = "AnalysisError";
+  }
+}
+
+/**
+ * Ask the AI to rank the tracked stocks for the given goals, and store the run.
+ *
+ * Order matters for cost: configuration and "is there anything to analyse" are checked first (free); then a run is
+ * reserved (it counts toward AI_DAILY_LIMIT whatever happens next); only then are prices fetched and the provider called.
+ */
+export async function runAnalysis(goals: GoalId[], now = new Date()): Promise<AnalysisView> {
+  const missing = config.ai.missing();
+  if (missing.length > 0) throw new AnalysisError(`ยังไม่ได้ตั้งค่า ${missing.join(", ")} ใน environment variables`, "not_configured");
+
+  const [tracked, profiles, tests] = await Promise.all([
+    listTrackedSymbols(),
+    listProfiles().catch(() => []),
+    listSupportTests().catch(() => []),
+  ]);
+  if (tracked.length === 0) throw new AnalysisError("ยังไม่มีหุ้นที่ track — เพิ่มที่หน้าจัดการหุ้นก่อน", "no_symbols");
+
+  const day = nyToday(now);
+  const id = await startAnalysis(day, goals, config.ai.model(), config.ai.dailyLimit());
+  if (id === null) {
+    throw new AnalysisError(`ใช้ครบ ${config.ai.dailyLimit()} ครั้งของวันนี้แล้ว (ปรับได้ด้วย AI_DAILY_LIMIT) ลองใหม่พรุ่งนี้`, "limit");
+  }
+
+  try {
+    // Current prices: the shared live cache (Finnhub -> Yahoo), then the price saved by the scheduled check.
+    // Capped at 8 s so prices plus the AI call always fit in the function's 60 s (usually instant: the cache is shared).
+    const live: Record<string, { price: number }> = await withTimeout(getLivePrices(tracked.map((s) => s.symbol)), PRICE_BUDGET_MS, "live prices")
+      .then((r) => r.prices)
+      .catch(() => ({}));
+    const priceOf = (symbol: string, saved: number | null) => live[symbol]?.price ?? saved;
+
+    const stocks = tracked.map((s) =>
+      buildStockInput(
+        s,
+        priceOf(s.symbol, s.price),
+        (() => {
+          const p = profiles.find((x) => x.symbol === s.symbol);
+          return p ? toProfileData(p) : undefined;
+        })(),
+        summarizeTrack(tests.filter((t) => t.symbol === s.symbol), day),
+        day,
+      ),
+    );
+
+    const reply = await chat({ system: SYSTEM_PROMPT, user: buildUserPrompt(goals, stocks, day) });
+    const parsed = parseAnalysis(reply, tracked.map((s) => s.symbol));
+
+    const picks: AnalysisPick[] = parsed.picks.map((p) => ({ ...p, price: stocks.find((s) => s.symbol === p.symbol)?.price ?? null }));
+    await finishAnalysis(id, { ok: true, result: { summary: parsed.summary, picks, caveats: parsed.caveats, universe: tracked.length } });
+    const view = await getAnalysis(id);
+    if (!view) throw new Error("analysis row missing after save");
+    return view;
+  } catch (err) {
+    const error =
+      err instanceof AnalysisParseError
+        ? new AnalysisError(`${err.message} — ลองใหม่อีกครั้ง (หรือเลือกโมเดลที่ทำตามคำสั่งได้ดีกว่า)`, "parse")
+        : err instanceof AiError
+          ? new AnalysisError(err.message, err.kind === "timeout" ? "timeout" : "ai")
+          : new AnalysisError("วิเคราะห์ไม่สำเร็จ ลองใหม่อีกครั้ง", "ai");
+    if (!(err instanceof AiError) && !(err instanceof AnalysisParseError)) console.error("analysis failed", err);
+    await finishAnalysis(id, { ok: false, error: error.message }).catch((e) => console.error("could not record the failed run", e));
+    throw error;
+  }
+}

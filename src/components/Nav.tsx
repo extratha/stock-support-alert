@@ -5,11 +5,12 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { hardNavigate } from "@/lib/hardNavigate";
-import { ActivityIcon, HistoryIcon, ListIcon, LogOutIcon, UsersIcon } from "./icons";
+import { ActivityIcon, HistoryIcon, ListIcon, LogOutIcon, SparklesIcon, UsersIcon } from "./icons";
 import { Spinner } from "./Spinner";
 
 const links: { href: string; label: string; icon: ReactNode }[] = [
   { href: "/", label: "แนวรับปัจจุบัน", icon: <ActivityIcon /> },
+  { href: "/analysis", label: "วิเคราะห์ด้วย AI", icon: <SparklesIcon /> },
   { href: "/symbols", label: "จัดการหุ้น", icon: <ListIcon /> },
   { href: "/recipients", label: "ผู้รับแจ้งเตือน", icon: <UsersIcon /> },
   { href: "/history", label: "ประวัติแจ้งเตือน", icon: <HistoryIcon /> },
