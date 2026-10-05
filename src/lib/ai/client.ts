@@ -2,22 +2,15 @@ import { config } from "@/lib/config";
 
 export type AiErrorKind = "config" | "rate_limit" | "timeout" | "http" | "bad_response";
 
-/**
- * `message` is safe to show to the user: it never contains the key.
- * `billable` = the provider may have done the work (it timed out, or answered with nothing), so the run counts toward
- * the daily limit. A request the provider turned away (bad key or model, over quota, overloaded) costs nothing.
- */
+/** `message` is safe to show to the user: it never contains the key. */
 export class AiError extends Error {
-  readonly billable: boolean;
   constructor(
     message: string,
     readonly kind: AiErrorKind,
     readonly status?: number,
-    billable?: boolean,
   ) {
     super(message);
     this.name = "AiError";
-    this.billable = billable ?? (kind === "timeout" || kind === "bad_response");
   }
 }
 
@@ -159,7 +152,6 @@ export async function chat({ system, user, models = config.ai.models() }: { syst
   const deadline = Date.now() + config.ai.timeoutMs();
   const skipped: SkippedModel[] = [];
   let last: AiError | undefined;
-  let billable = false;
 
   outer: for (const model of models) {
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -173,7 +165,6 @@ export async function chat({ system, user, models = config.ai.models() }: { syst
       } catch (err) {
         if (!(err instanceof AiError)) throw err;
         last = err;
-        billable ||= err.billable;
         if (err.kind === "timeout" || err.kind === "config" || err.status === 401 || err.status === 403) throw err;
         if (transient(err) && attempt === 0) {
           await sleep(RETRY_DELAY_MS);
@@ -192,6 +183,5 @@ export async function chat({ system, user, models = config.ai.models() }: { syst
     `ลองแล้ว ${skipped.length} โมเดลแต่ไม่สำเร็จ — ${skipped.map((s) => `${s.model}: ${s.reason}`).join(" | ")} · ข้อความล่าสุด: ${last.message}`,
     last.kind,
     last.status,
-    billable,
   );
 }

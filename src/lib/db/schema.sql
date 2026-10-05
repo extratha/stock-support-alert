@@ -166,8 +166,8 @@ begin
   end if;
 end $$;
 
--- One row per run of the AI stock ranking (src/lib/jobs/analysis.ts). The row is created BEFORE the provider is called
--- and counts toward the daily limit even when the call fails, because every call costs quota with the provider.
+-- One row per run of the AI stock ranking (src/lib/jobs/analysis.ts). The row is reserved BEFORE the provider is called
+-- (so two clicks at once cannot pass the daily limit) and deleted again if the run ends in an error: only results count.
 create table if not exists ai_analyses (
   id          bigserial primary key,
   day         date not null,                 -- New York date of the run

@@ -24,18 +24,14 @@ export async function startAnalysis(day: string, goals: GoalId[], model: string,
 }
 
 /** `model` = the one that actually answered (it can differ from the one reserved when a fallback was used). */
-export async function finishAnalysis(id: number, outcome: { ok: true; model: string; result: StoredResult } | { ok: false; error: string }) {
-  if (outcome.ok) {
-    // Pass the object, not a JSON string: with `prepare: false` postgres.js learns the column is jsonb and runs the value
-    // through JSON.stringify itself, so a string would be stored as one JSON string instead of an object.
-    const db = sql();
-    await db`update ai_analyses set status = 'ok', model = ${outcome.model}, result = ${db.json(outcome.result as never)} where id = ${id}`;
-  } else {
-    await sql()`update ai_analyses set status = 'failed', error = ${outcome.error.slice(0, 500)} where id = ${id}`;
-  }
+export async function finishAnalysis(id: number, outcome: { ok: true; model: string; result: StoredResult }) {
+  // Pass the object, not a JSON string: with `prepare: false` postgres.js learns the column is jsonb and runs the value
+  // through JSON.stringify itself, so a string would be stored as one JSON string instead of an object.
+  const db = sql();
+  await db`update ai_analyses set status = 'ok', model = ${outcome.model}, result = ${db.json(outcome.result as never)} where id = ${id}`;
 }
 
-/** Give a reserved run back: the provider turned the request away without doing any work, so it must not use up the day. */
+/** Give a reserved run back: a run that ended in an error does not use up the day. */
 export async function cancelAnalysis(id: number) {
   await sql()`delete from ai_analyses where id = ${id}`;
 }

@@ -72,10 +72,8 @@ export async function runAnalysis(goals: GoalId[], opts: { model?: string } = {}
           ? new AnalysisError(err.message, err.kind === "timeout" ? "timeout" : "ai")
           : new AnalysisError("วิเคราะห์ไม่สำเร็จ ลองใหม่อีกครั้ง", "ai");
     if (!(err instanceof AiError) && !(err instanceof AnalysisParseError)) console.error("analysis failed", err);
-    // A request the provider turned away (bad key/model, over quota, overloaded) cost nothing: give the run back.
-    // One that may have been processed (timeout, empty or unusable reply) stays counted.
-    const refund = err instanceof AiError && !err.billable;
-    await (refund ? cancelAnalysis(id) : finishAnalysis(id, { ok: false, error: error.message })).catch((e) => console.error("could not record the failed run", e));
+    // Only runs that produced a result count toward AI_DAILY_LIMIT: whatever went wrong, the reserved run is given back.
+    await cancelAnalysis(id).catch((e) => console.error("could not give back the failed run", e));
     throw error;
   }
 }

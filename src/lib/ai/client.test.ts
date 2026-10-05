@@ -100,10 +100,10 @@ describe("chat", () => {
 
   it("a timeout stops at once (no time left for another try); an empty reply is its own error", async () => {
     fetchMock.mockRejectedValue(Object.assign(new Error("t"), { name: "TimeoutError" }));
-    expect((await run(chat(call))).error).toMatchObject({ kind: "timeout", billable: true });
+    expect((await run(chat(call))).error).toMatchObject({ kind: "timeout" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     fetchMock.mockImplementation(async () => ok("   "));
-    expect((await run(chat(call))).error).toMatchObject({ kind: "bad_response", billable: true });
+    expect((await run(chat(call))).error).toMatchObject({ kind: "bad_response" });
     fetchMock.mockImplementation(async () => status(200, "not json"));
     expect((await run(chat(call))).error).toMatchObject({ kind: "bad_response" });
   });
@@ -116,11 +116,11 @@ describe("chat", () => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
-    it("gives up after that one retry and reports the provider's own message; the run costs nothing", async () => {
+    it("gives up after that one retry and reports the provider's own message", async () => {
       fetchMock.mockImplementation(async () => status(503, JSON.stringify({ error: { message: "high demand" } })));
       const { error } = await run(chat(call));
       expect(fetchMock).toHaveBeenCalledTimes(2);
-      expect(error).toMatchObject({ kind: "http", status: 503, billable: false, message: expect.stringContaining("high demand") });
+      expect(error).toMatchObject({ kind: "http", status: 503, message: expect.stringContaining("high demand") });
     });
 
     it("does not retry what a retry cannot fix: bad key or model, quota", async () => {
@@ -169,16 +169,13 @@ describe("chat", () => {
       expect(error!.message).toContain("AI_API_KEY");
     });
 
-    it("when none works, lists what happened to each, keeps the last kind, and counts the run only if a model may have worked on it", async () => {
+    it("when none works, lists what happened to each and keeps the last kind", async () => {
       fetchMock.mockImplementationOnce(async () => ok("")).mockImplementation(async () => status(429));
       const { error } = await run(chat({ ...call, models: ["a", "b"] }));
       expect(error!.message).toContain("ลองแล้ว 2 โมเดล");
       expect(error!.message).toContain("a: ไม่มีคำตอบ");
       expect(error!.message).toContain("b: โควตาหมดหรือถูกจำกัด (429)");
-      expect(error).toMatchObject({ kind: "rate_limit", status: 429, billable: true }); // a's empty reply may have cost quota
-      fetchMock.mockReset();
-      fetchMock.mockImplementation(async () => status(429));
-      expect((await run(chat({ ...call, models: ["a", "b"] }))).error!.billable).toBe(false);
+      expect(error).toMatchObject({ kind: "rate_limit", status: 429 });
     });
 
     it("shares one time budget: with little left it stops instead of starting another try", async () => {

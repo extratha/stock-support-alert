@@ -77,18 +77,16 @@ describe("runAnalysis", () => {
     expect(chat).not.toHaveBeenCalled();
   });
 
-  it("a request the provider turned away costs nothing: the reserved run is given back, with a user-safe message", async () => {
-    chat.mockRejectedValueOnce(new AiError("ผู้ให้บริการ AI จำกัดจำนวนครั้ง", "rate_limit", 429));
-    await expect(runAnalysis([], {}, NOW)).rejects.toMatchObject({ code: "ai", message: "ผู้ให้บริการ AI จำกัดจำนวนครั้ง" });
+  it.each([
+    ["rate limit", new AiError("ผู้ให้บริการ AI จำกัดจำนวนครั้ง", "rate_limit", 429), "ai"],
+    ["overloaded", new AiError("ผู้ให้บริการ AI ตอบ error (HTTP 503)", "http", 503), "ai"],
+    ["timeout", new AiError("ช้าไป", "timeout"), "timeout"],
+    ["empty reply", new AiError("AI ไม่ได้ส่งคำตอบกลับมา", "bad_response"), "ai"],
+  ])("an error (%s) never uses up the day: the reserved run is given back, with a user-safe message", async (_, err, code) => {
+    chat.mockRejectedValueOnce(err);
+    await expect(runAnalysis([], {}, NOW)).rejects.toMatchObject({ code, message: err.message });
     expect(cancelAnalysis).toHaveBeenCalledWith(7);
     expect(finishAnalysis).not.toHaveBeenCalled();
-  });
-
-  it("one the provider may have worked on (timeout) stays counted and is recorded as failed", async () => {
-    chat.mockRejectedValueOnce(new AiError("ช้าไป", "timeout"));
-    await expect(runAnalysis([], {}, NOW)).rejects.toMatchObject({ code: "timeout" });
-    expect(finishAnalysis).toHaveBeenCalledWith(7, { ok: false, error: "ช้าไป" });
-    expect(cancelAnalysis).not.toHaveBeenCalled();
   });
 
   it("the chosen model goes first and the others stay as fallbacks; the run is reserved under the chosen one", async () => {
@@ -121,14 +119,16 @@ describe("runAnalysis", () => {
   it("a reply that cannot be used is a parse error, not a crash", async () => {
     chat.mockResolvedValueOnce({ text: "sorry, I cannot do that", model: "m", skipped: [] });
     await expect(runAnalysis([], {}, NOW)).rejects.toMatchObject({ code: "parse" });
-    expect(finishAnalysis).toHaveBeenCalledWith(7, { ok: false, error: expect.stringContaining("ลองใหม่") }); // the provider did answer: counted
+    expect(cancelAnalysis).toHaveBeenCalledWith(7); // not counted either
+    expect(finishAnalysis).not.toHaveBeenCalled();
   });
 
-  it("an unexpected error is recorded and reported without leaking its details", async () => {
+  it("an unexpected error is reported without leaking its details, and not counted", async () => {
     getAnalysis.mockResolvedValueOnce(null);
     const err = await runAnalysis([], {}, NOW).catch((e) => e);
     expect(err).toBeInstanceOf(AnalysisError);
     expect(err.message).toBe("วิเคราะห์ไม่สำเร็จ ลองใหม่อีกครั้ง");
+    expect(cancelAnalysis).toHaveBeenCalledWith(7);
   });
 });
 
