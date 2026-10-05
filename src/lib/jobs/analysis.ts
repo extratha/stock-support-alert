@@ -3,7 +3,7 @@ import { buildStockInput, buildUserPrompt, SYSTEM_PROMPT } from "@/lib/analysis/
 import { AnalysisParseError, parseAnalysis } from "@/lib/analysis/parse";
 import type { AnalysisPick, AnalysisView, GoalId } from "@/lib/analysis/types";
 import { config } from "@/lib/config";
-import { finishAnalysis, getAnalysis, startAnalysis } from "@/lib/db/analyses";
+import { cancelAnalysis, finishAnalysis, getAnalysis, startAnalysis } from "@/lib/db/analyses";
 import { listProfiles } from "@/lib/db/profiles";
 import { listSupportTests } from "@/lib/db/supports";
 import { listTrackedSymbols } from "@/lib/db/symbols";
@@ -15,7 +15,7 @@ import { getLivePrices } from "./livePrices";
 
 const PRICE_BUDGET_MS = 8000;
 
-export type AnalysisErrorCode = "not_configured" | "no_symbols" | "limit" | "timeout" | "ai" | "parse";
+export type AnalysisErrorCode = "bad_request" | "not_configured" | "no_symbols" | "limit" | "timeout" | "ai" | "parse";
 
 /** `message` is user-safe (shown on the page). */
 export class AnalysisError extends Error {
@@ -34,9 +34,14 @@ export class AnalysisError extends Error {
  * Order matters for cost: configuration and "is there anything to analyse" are checked first (free); then a run is
  * reserved (it counts toward AI_DAILY_LIMIT whatever happens next); only then are prices fetched and the provider called.
  */
-export async function runAnalysis(goals: GoalId[], now = new Date()): Promise<AnalysisView> {
+export async function runAnalysis(goals: GoalId[], opts: { model?: string } = {}, now = new Date()): Promise<AnalysisView> {
   const missing = config.ai.missing();
   if (missing.length > 0) throw new AnalysisError(`ยังไม่ได้ตั้งค่า ${missing.join(", ")} ใน environment variables`, "not_configured");
+
+  // The chosen model goes first; the others stay as fallbacks. Only models listed in AI_MODEL can be chosen.
+  const configured = config.ai.models();
+  if (opts.model !== undefined && !configured.includes(opts.model)) throw new AnalysisError("โมเดลที่เลือกไม่อยู่ในรายการ AI_MODEL", "bad_request");
+  const models = opts.model === undefined ? configured : [opts.model, ...configured.filter((m) => m !== opts.model)];
 
   const [tracked, profiles, tests] = await Promise.all([
     listTrackedSymbols(),
@@ -46,7 +51,7 @@ export async function runAnalysis(goals: GoalId[], now = new Date()): Promise<An
   if (tracked.length === 0) throw new AnalysisError("ยังไม่มีหุ้นที่ track — เพิ่มที่หน้าจัดการหุ้นก่อน", "no_symbols");
 
   const day = nyToday(now);
-  const id = await startAnalysis(day, goals, config.ai.model(), config.ai.dailyLimit());
+  const id = await startAnalysis(day, goals, models[0], config.ai.dailyLimit());
   if (id === null) {
     throw new AnalysisError(`ใช้ครบ ${config.ai.dailyLimit()} ครั้งของวันนี้แล้ว (ปรับได้ด้วย AI_DAILY_LIMIT) ลองใหม่พรุ่งนี้`, "limit");
   }
@@ -72,11 +77,15 @@ export async function runAnalysis(goals: GoalId[], now = new Date()): Promise<An
       ),
     );
 
-    const reply = await chat({ system: SYSTEM_PROMPT, user: buildUserPrompt(goals, stocks, day) });
-    const parsed = parseAnalysis(reply, tracked.map((s) => s.symbol));
+    const reply = await chat({ system: SYSTEM_PROMPT, user: buildUserPrompt(goals, stocks, day), models });
+    const parsed = parseAnalysis(reply.text, tracked.map((s) => s.symbol));
 
     const picks: AnalysisPick[] = parsed.picks.map((p) => ({ ...p, price: stocks.find((s) => s.symbol === p.symbol)?.price ?? null }));
-    await finishAnalysis(id, { ok: true, result: { summary: parsed.summary, picks, caveats: parsed.caveats, universe: tracked.length } });
+    await finishAnalysis(id, {
+      ok: true,
+      model: reply.model,
+      result: { summary: parsed.summary, picks, caveats: parsed.caveats, universe: tracked.length, skipped: reply.skipped },
+    });
     const view = await getAnalysis(id);
     if (!view) throw new Error("analysis row missing after save");
     return view;
@@ -88,7 +97,10 @@ export async function runAnalysis(goals: GoalId[], now = new Date()): Promise<An
           ? new AnalysisError(err.message, err.kind === "timeout" ? "timeout" : "ai")
           : new AnalysisError("วิเคราะห์ไม่สำเร็จ ลองใหม่อีกครั้ง", "ai");
     if (!(err instanceof AiError) && !(err instanceof AnalysisParseError)) console.error("analysis failed", err);
-    await finishAnalysis(id, { ok: false, error: error.message }).catch((e) => console.error("could not record the failed run", e));
+    // A request the provider turned away (bad key/model, over quota, overloaded) cost nothing: give the run back.
+    // One that may have been processed (timeout, empty or unusable reply) stays counted.
+    const refund = err instanceof AiError && !err.billable;
+    await (refund ? cancelAnalysis(id) : finishAnalysis(id, { ok: false, error: error.message })).catch((e) => console.error("could not record the failed run", e));
     throw error;
   }
 }

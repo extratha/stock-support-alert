@@ -70,4 +70,6 @@ export interface AnalysisView {
   caveats: string[];
   /** how many tracked stocks the AI looked at */
   universe: number;
+  /** models tried before `model` that could not be used (empty for most runs) */
+  skipped: { model: string; reason: string }[];
 }

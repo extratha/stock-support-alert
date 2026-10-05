@@ -24,13 +24,13 @@ describe("POST /api/analysis", () => {
     const res = await post({ goals: ["dividend", "growth"] });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ analysis: { id: 1 }, used: 2 });
-    expect(runAnalysis).toHaveBeenCalledWith(["growth", "dividend"]);
+    expect(runAnalysis).toHaveBeenCalledWith(["growth", "dividend"], { model: undefined });
   });
 
   it("no goals means a balanced view", async () => {
     runAnalysis.mockResolvedValue({ id: 1 });
     expect((await post({})).status).toBe(200);
-    expect(runAnalysis).toHaveBeenCalledWith([]);
+    expect(runAnalysis).toHaveBeenCalledWith([], { model: undefined });
   });
 
   it("rejects unknown goals and bad bodies before anything is spent", async () => {
@@ -41,7 +41,18 @@ describe("POST /api/analysis", () => {
     expect(runAnalysis).not.toHaveBeenCalled();
   });
 
+  it("passes the chosen model on (the job checks it against AI_MODEL) and rejects a model that is not a string", async () => {
+    runAnalysis.mockResolvedValue({ id: 1 });
+    expect((await post({ goals: [], model: "gemini-x" })).status).toBe(200);
+    expect(runAnalysis).toHaveBeenCalledWith([], { model: "gemini-x" });
+    runAnalysis.mockClear();
+    expect((await post({ goals: [], model: 5 })).status).toBe(400);
+    expect((await post({ goals: [], model: ["a"] })).status).toBe(400);
+    expect(runAnalysis).not.toHaveBeenCalled();
+  });
+
   it.each([
+    ["bad_request", 400],
     ["not_configured", 503],
     ["no_symbols", 409],
     ["limit", 429],

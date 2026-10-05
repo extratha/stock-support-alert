@@ -13,5 +13,5 @@ export default async function AnalysisPage() {
     PAGE_DATA_TIMEOUT_MS,
     "load the last analysis",
   );
-  return <AnalysisPanel initial={latest} used={used} limit={config.ai.dailyLimit()} missing={config.ai.missing()} model={config.ai.model()} />;
+  return <AnalysisPanel initial={latest} used={used} limit={config.ai.dailyLimit()} missing={config.ai.missing()} models={config.ai.models()} />;
 }

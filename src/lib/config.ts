@@ -48,7 +48,12 @@ export const config = {
   ai: {
     baseUrl: () => (process.env.AI_BASE_URL?.trim() || DEFAULT_AI_BASE_URL).replace(/\/+$/, ""),
     apiKey: () => process.env.AI_API_KEY?.trim() ?? "",
-    model: () => process.env.AI_MODEL?.trim() ?? "",
+    /**
+     * AI_MODEL is one model, or several separated by commas: the first is the default, the others are tried in order
+     * when it cannot be used (quota used up, overloaded, retired) and can be picked on the page. Duplicates are dropped.
+     */
+    models: (): string[] => [...new Set((process.env.AI_MODEL ?? "").split(",").map((m) => m.trim()).filter(Boolean))],
+    model: (): string => config.ai.models()[0] ?? "",
     /** Sent only when set: some newer models reject any value but their default. */
     temperature: () => {
       const raw = process.env.AI_TEMPERATURE;
@@ -62,7 +67,7 @@ export const config = {
     /** Names of the variables still missing (empty = ready). */
     missing: (): string[] => [
       ...(process.env.AI_API_KEY?.trim() ? [] : ["AI_API_KEY"]),
-      ...(process.env.AI_MODEL?.trim() ? [] : ["AI_MODEL"]),
+      ...(config.ai.models().length > 0 ? [] : ["AI_MODEL"]),
     ],
   },
   alertTiers: (): Tier[] => {

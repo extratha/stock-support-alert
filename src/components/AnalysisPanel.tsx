@@ -18,6 +18,11 @@ function Result({ a }: { a: AnalysisView }) {
           วิเคราะห์เมื่อ {formatDateTime(new Date(a.createdAt))} · โมเดล <span className="font-mono">{a.model}</span> · ดูหุ้น {a.universe} ตัว ·
           เป้าหมาย: {goalLabels.length > 0 ? goalLabels.join(", ") : "ภาพรวมสมดุล"}
         </p>
+        {a.skipped.length > 0 && (
+          <p className="text-xs text-warning">
+            ใช้โมเดลสำรอง: {a.skipped.map((s) => `${s.model} ใช้ไม่ได้ (${s.reason})`).join(", ")} จึงสลับมาใช้ {a.model}
+          </p>
+        )}
         {a.summary && <p className="text-sm leading-relaxed">{a.summary}</p>}
       </div>
 
@@ -79,16 +84,18 @@ export function AnalysisPanel({
   used: initialUsed,
   limit,
   missing,
-  model,
+  models,
 }: {
   initial: AnalysisView | null;
   used: number;
   limit: number;
   /** names of the AI environment variables not set yet (empty = ready) */
   missing: string[];
-  model: string;
+  /** models from AI_MODEL: the first is the default, the rest are fallbacks and can be picked */
+  models: string[];
 }) {
   const [goals, setGoals] = useState<Set<GoalId>>(new Set());
+  const [model, setModel] = useState(models[0] ?? "");
   const [result, setResult] = useState(initial);
   const [used, setUsed] = useState(initialUsed);
   const [busy, setBusy] = useState(false);
@@ -112,7 +119,7 @@ export function AnalysisPanel({
       const res = await apiFetch("/api/analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goals: [...goals] }),
+        body: JSON.stringify({ goals: [...goals], ...(models.length > 1 ? { model } : {}) }),
       });
       const body = (await res.json().catch(() => ({}))) as { analysis?: AnalysisView; error?: string; used?: number | null };
       if (typeof body.used === "number") setUsed(body.used);
@@ -184,8 +191,27 @@ export function AnalysisPanel({
           {busy ? "กำลังวิเคราะห์…" : "วิเคราะห์ด้วย AI"}
         </button>
         <span className="text-xs text-muted">
-          วันนี้ใช้ไปแล้ว <span className="font-mono tabular-nums">{used}/{limit}</span> ครั้ง{model && <> · โมเดล <span className="font-mono">{model}</span></>}
+          วันนี้ใช้ไปแล้ว <span className="font-mono tabular-nums">{used}/{limit}</span> ครั้ง
+          {models.length === 1 && <> · โมเดล <span className="font-mono">{models[0]}</span></>}
         </span>
+        {models.length > 1 && (
+          <label className="flex items-center gap-2 text-xs text-muted">
+            โมเดล
+            <select
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              disabled={busy}
+              className="min-h-11 cursor-pointer rounded-lg border border-border bg-card px-2 font-mono text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {models.map((m, i) => (
+                <option key={m} value={m}>
+                  {m}
+                  {i === 0 ? " (หลัก)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       <div aria-live="polite" className="min-h-5">

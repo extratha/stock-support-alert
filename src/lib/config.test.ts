@@ -16,3 +16,25 @@ describe("config.alertTiers", () => {
     expect(config.alertTiers()).toEqual(["major"]);
   });
 });
+
+describe("config.ai.models", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("AI_MODEL is one model or a comma list: trimmed, empty entries and duplicates dropped, first = default", () => {
+    vi.stubEnv("AI_MODEL", " gemini-a , gemini-b,,gemini-a ,");
+    expect(config.ai.models()).toEqual(["gemini-a", "gemini-b"]);
+    expect(config.ai.model()).toBe("gemini-a");
+    vi.stubEnv("AI_MODEL", "only-one");
+    expect(config.ai.models()).toEqual(["only-one"]);
+  });
+
+  it("counts as not set when there is no model name at all", () => {
+    vi.stubEnv("AI_API_KEY", "k");
+    for (const raw of ["", "  ", ",,"]) {
+      vi.stubEnv("AI_MODEL", raw);
+      expect(config.ai.models()).toEqual([]);
+      expect(config.ai.model()).toBe("");
+      expect(config.ai.missing()).toEqual(["AI_MODEL"]);
+    }
+  });
+});

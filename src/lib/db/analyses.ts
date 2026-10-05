@@ -7,6 +7,7 @@ export interface StoredResult {
   picks: AnalysisPick[];
   caveats: string[];
   universe: number;
+  skipped?: { model: string; reason: string }[];
 }
 
 /**
@@ -22,12 +23,18 @@ export async function startAnalysis(day: string, goals: GoalId[], model: string,
   return rows[0]?.id ?? null;
 }
 
-export async function finishAnalysis(id: number, outcome: { ok: true; result: StoredResult } | { ok: false; error: string }) {
+/** `model` = the one that actually answered (it can differ from the one reserved when a fallback was used). */
+export async function finishAnalysis(id: number, outcome: { ok: true; model: string; result: StoredResult } | { ok: false; error: string }) {
   if (outcome.ok) {
-    await sql()`update ai_analyses set status = 'ok', result = ${JSON.stringify(outcome.result)}::jsonb where id = ${id}`;
+    await sql()`update ai_analyses set status = 'ok', model = ${outcome.model}, result = ${JSON.stringify(outcome.result)}::jsonb where id = ${id}`;
   } else {
     await sql()`update ai_analyses set status = 'failed', error = ${outcome.error.slice(0, 500)} where id = ${id}`;
   }
+}
+
+/** Give a reserved run back: the provider turned the request away without doing any work, so it must not use up the day. */
+export async function cancelAnalysis(id: number) {
+  await sql()`delete from ai_analyses where id = ${id}`;
 }
 
 export async function runsOnDay(day: string): Promise<number> {
@@ -52,6 +59,7 @@ const toView = (r: Row): AnalysisView => ({
   picks: r.result.picks,
   caveats: r.result.caveats,
   universe: r.result.universe,
+  skipped: r.result.skipped ?? [],
 });
 
 export async function getAnalysis(id: number): Promise<AnalysisView | null> {
