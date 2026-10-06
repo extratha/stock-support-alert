@@ -1,5 +1,8 @@
 name: Recalculate support levels
 
+# BACKUP ONLY: the evening run is driven by cron-job.org (README "ตัวตั้งเวลา"); this late GitHub run then
+# finds every symbol current and does nothing.
+#
 # 22:00 UTC = 18:00 EDT / 17:00 EST: always after the 16:00 New York close.
 # The endpoint handles at most 8 symbols per call (Twelve Data free plan: 8 credits/minute)
 # and reports how many are left; this job pauses ~1 minute between calls until none are.

@@ -55,3 +55,21 @@ export async function getQuotes(symbols: string[], now: Date): Promise<QuoteLook
 
   return { prices, lows, prevCloses, errors, fetched: stale.length, cached: fresh.size, remaining: deferred.length };
 }
+
+/** Pause between batches: the free Twelve Data plan allows API_CREDITS_PER_MINUTE credits per minute. */
+export const BATCH_PAUSE_MS = 61_000;
+export const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Fetch quotes batch by batch (one per minute) until every symbol has a fresh one, so ONE call of the check does the
+ * whole job and an outside scheduler needs one request per check. Stops early when the next pause would not fit
+ * `budgetMs`; whatever is still missing is then reported by the check as a quote error. No-op when all are fresh.
+ */
+export async function warmQuotes(symbols: string[], budgetMs: number): Promise<void> {
+  const started = Date.now();
+  for (;;) {
+    const { remaining } = await getQuotes(symbols, new Date());
+    if (remaining === 0 || Date.now() - started + BATCH_PAUSE_MS > budgetMs) return;
+    await pause(BATCH_PAUSE_MS);
+  }
+}

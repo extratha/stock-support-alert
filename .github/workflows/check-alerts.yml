@@ -1,5 +1,8 @@
 name: Check support alerts
 
+# BACKUP ONLY: GitHub starts scheduled runs hours late (5-7 h measured), so the daily checks are driven by cron-job.org
+# (see README "ตัวตั้งเวลา"). Running both is safe: each check is recorded in job_runs and alerts are claimed.
+#
 # Twice a day, at 10:30 and 13:30 America/New_York (21:30/00:30 in Thailand in summer, 22:30/01:30 in winter).
 # GitHub cron is UTC and ignores DST, so both candidates of each check are scheduled:
 #   14:30 UTC = 10:30 EDT   15:30 UTC = 10:30 EST

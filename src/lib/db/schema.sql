@@ -179,3 +179,16 @@ create table if not exists ai_analyses (
   error       text                           -- user-safe message (status failed)
 );
 create index if not exists ai_analyses_day_idx on ai_analyses (day);
+
+-- What brokerage analysts say, from Finnhub (opinions, display + AI input only). Refreshed every few days.
+alter table stock_profiles add column if not exists rec_strong_buy integer;
+alter table stock_profiles add column if not exists rec_buy integer;
+alter table stock_profiles add column if not exists rec_hold integer;
+alter table stock_profiles add column if not exists rec_sell integer;
+alter table stock_profiles add column if not exists rec_strong_sell integer;
+alter table stock_profiles add column if not exists rec_period date;
+alter table stock_profiles add column if not exists target_mean double precision;
+alter table stock_profiles add column if not exists target_high double precision;
+alter table stock_profiles add column if not exists target_low double precision;
+alter table stock_profiles add column if not exists target_updated date;
+alter table stock_profiles add column if not exists analysts_at timestamptz;

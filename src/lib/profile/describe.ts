@@ -16,7 +16,7 @@ export const toProfileData = (p: StockProfile): ProfileData => ({
  * "buy", "cheap" or "good". `caution` only marks figures that mean more risk or a known event ahead.
  */
 interface ProfileLine {
-  key: "pe" | "growth" | "margin" | "dividend" | "beta" | "fromHigh" | "drawdown" | "earnings";
+  key: "pe" | "growth" | "margin" | "dividend" | "beta" | "fromHigh" | "drawdown" | "earnings" | "analysts" | "target";
   label: string;
   value: string;
   meaning: string;
@@ -201,6 +201,48 @@ function describeEarnings(p: ProfileData, today: string): ProfileLine | null {
   };
 }
 
+/** Buy / hold / sell counts. Brokerage analysts rarely say "sell", so a buy majority is the normal case, not news. */
+function describeAnalysts(p: ProfileData): ProfileLine | null {
+  const buy = (p.recStrongBuy ?? 0) + (p.recBuy ?? 0);
+  const hold = p.recHold ?? 0;
+  const sell = (p.recSell ?? 0) + (p.recStrongSell ?? 0);
+  const total = buy + hold + sell;
+  if (!p.recPeriod || total === 0) return null;
+  const sellShare = sell / total;
+  const month = p.recPeriod.slice(0, 7);
+  const lean =
+    buy / total >= 0.7
+      ? "ส่วนใหญ่แนะนำซื้อ ซึ่งพบได้บ่อยกับหุ้นใหญ่ เพราะนักวิเคราะห์ฝั่งโบรกเกอร์ไม่ค่อยแนะนำขาย จึงไม่ใช่สัญญาณที่แรงนัก"
+      : sellShare >= 0.25
+        ? "มีนักวิเคราะห์แนะนำขายมากผิดปกติ (คำแนะนำขายพบได้น้อย) ควรหาเหตุผลก่อนตัดสินใจ"
+        : "ความเห็นแบ่งกันมากกว่าปกติ";
+  return {
+    key: "analysts",
+    label: "คำแนะนำนักวิเคราะห์",
+    value: `ซื้อ ${buy} · ถือ ${hold} · ขาย ${sell}`,
+    meaning: `จาก ${total} คน (ข้อมูลเดือน ${month}) — ${lean} · เป็นความเห็น ไม่ใช่การรับประกัน`,
+    caution: sellShare >= 0.25,
+  };
+}
+
+/** The average 12-month price target, against the price on the card. */
+function describeTarget(p: ProfileData, price: number | null): ProfileLine | null {
+  const t = p.targetMean ?? null;
+  const now = price ?? p.lastClose ?? null;
+  if (t === null || now === null || now <= 0) return null;
+  const gap = (t / now - 1) * 100;
+  const range = p.targetLow && p.targetHigh ? ` (ต่ำสุด $${p.targetLow.toFixed(0)} – สูงสุด $${p.targetHigh.toFixed(0)})` : "";
+  return {
+    key: "target",
+    label: "ราคาเป้าหมายนักวิเคราะห์",
+    value: `$${t.toFixed(2)} (${pctText(gap)})`,
+    meaning:
+      `ค่าเฉลี่ยราคาเป้าหมาย 12 เดือนของนักวิเคราะห์${range} ${gap >= 0 ? "สูงกว่า" : "ต่ำกว่า"}ราคาตอนนี้ ${Math.abs(gap).toFixed(0)}% — ` +
+      "ราคาเป้าหมายโดยรวมมักมองบวกเกินจริงและพลาดบ่อย ใช้ดูว่าตลาดคาดหวังอะไร ไม่ใช่ราคาที่จะไปถึง",
+    caution: false,
+  };
+}
+
 /** `price` = the price shown on the card (live if available); `today` = New York date YYYY-MM-DD. */
 export function describeProfile(p: ProfileData | undefined, price: number | null, today: string): ProfileView {
   if (!p) return { lines: [], footnote: null };
@@ -213,10 +255,13 @@ export function describeProfile(p: ProfileData | undefined, price: number | null
     describeFromHigh(p, price),
     describeDrawdown(p, today),
     describeEarnings(p, today),
+    describeAnalysts(p),
+    describeTarget(p, price),
   ].filter((l): l is ProfileLine => l !== null);
 
   const parts: string[] = [];
   if (p.fundamentalsAt) parts.push(`ข้อมูลพื้นฐาน ณ ${formatDateString(p.fundamentalsAt.slice(0, 10))} จาก Finnhub`);
+  if (p.recPeriod || p.targetMean) parts.push("คำแนะนำ/ราคาเป้าหมายนักวิเคราะห์จาก Finnhub");
   if (p.historyAt) parts.push(`ราคาย้อนหลังจาก Twelve Data`);
   parts.push("เกณฑ์ที่ใช้แปลความหมายเป็นค่าประมาณทั่วไป ไม่ใช่คำแนะนำการลงทุน");
   return { lines, footnote: lines.length ? parts.join(" · ") : null };

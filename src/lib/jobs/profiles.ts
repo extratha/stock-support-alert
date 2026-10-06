@@ -1,10 +1,12 @@
-import { saveFundamentals, symbolsNeedingFundamentals } from "@/lib/db/profiles";
+import { saveAnalysts, saveFundamentals, symbolsNeedingAnalysts, symbolsNeedingFundamentals } from "@/lib/db/profiles";
 import { nyToday } from "@/lib/market/calendar";
-import { fetchFundamentals } from "@/lib/profile/finnhub";
+import { fetchAnalysts, fetchFundamentals } from "@/lib/profile/finnhub";
 
 /** Fundamentals change quarterly; refreshing once a day is plenty. */
 const MAX_AGE_HOURS = 20;
-const CONCURRENCY = 5; // 2 Finnhub calls per symbol; the free plan allows 60/minute
+const CONCURRENCY = 5; // 2 Finnhub calls per symbol (+2 every few days for analysts); the free plan allows 60/minute
+/** Analyst views move slowly; refreshing them every 3 days keeps a daily run well under 60 calls a minute. */
+const ANALYSTS_MAX_AGE_HOURS = 72;
 
 /**
  * Refresh stale fundamentals (up to `limit` symbols) under one overall deadline. Never throws; a symbol that fails
@@ -24,6 +26,8 @@ export async function refreshFundamentals({
   const todo = symbols ?? (await symbolsNeedingFundamentals(MAX_AGE_HOURS, limit));
   const deadline = AbortSignal.timeout(deadlineMs);
   const today = nyToday(now);
+  const analystsDue = await symbolsNeedingAnalysts(todo, ANALYSTS_MAX_AGE_HOURS).catch(() => new Set<string>());
+  const targets = { allowed: true }; // flips off after the first "not on your plan"
   let next = 0;
   const worker = async () => {
     while (next < todo.length) {
@@ -35,6 +39,13 @@ export async function refreshFundamentals({
       try {
         await saveFundamentals(symbol, await fetchFundamentals(symbol, key, today, deadline));
         updated.push(symbol);
+        if (analystsDue.has(symbol) && !deadline.aborted) {
+          try {
+            await saveAnalysts(symbol, await fetchAnalysts(symbol, key, targets, deadline));
+          } catch (e) {
+            console.error("analysts failed", symbol, e); // best effort: never fails the fundamentals
+          }
+        }
       } catch (err) {
         errors[symbol] = err instanceof Error ? err.message : String(err);
       }

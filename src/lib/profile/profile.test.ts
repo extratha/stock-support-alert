@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Candle } from "@/lib/support/types";
 import { describeProfile, profileText, type ProfileData } from "./describe";
-import { parseMetric, parseNextEarnings } from "./finnhub";
+import { fetchAnalysts, parseMetric, parseNextEarnings, parsePriceTarget, parseRecommendations } from "./finnhub";
 import { historyStats } from "./history";
 
 const bar = (date: string, close: number, high = close, low = close): Candle => ({ date, open: close, high, low, close, volume: 1 });
@@ -211,5 +211,80 @@ describe("describeProfile: dividend", () => {
   it("shows nothing when there is no figure (pays none, or unknown): nothing is guessed", () => {
     expect(line({ dividendYield: null }, "dividend")).toBeUndefined();
     expect(line({ dividendYield: 0 }, "dividend")).toBeUndefined();
+  });
+});
+
+describe("Finnhub analyst parsers", () => {
+  it("takes the most recent month of recommendations, whatever the order", () => {
+    const json = [
+      { period: "2026-08-01", strongBuy: 1, buy: 1, hold: 1, sell: 1, strongSell: 1, symbol: "X" },
+      { period: "2026-10-01", strongBuy: 20, buy: 18, hold: 6, sell: 1, strongSell: 0, symbol: "X" },
+      { period: "bad", strongBuy: 99 },
+    ];
+    expect(parseRecommendations(json)).toEqual({ recStrongBuy: 20, recBuy: 18, recHold: 6, recSell: 1, recStrongSell: 0, recPeriod: "2026-10-01" });
+    expect(parseRecommendations([])).toMatchObject({ recBuy: null, recPeriod: null });
+    expect(parseRecommendations({ error: "x" })).toMatchObject({ recPeriod: null });
+  });
+
+  it("reads the price target, ignoring an empty one", () => {
+    expect(parsePriceTarget({ targetMean: 586.13, targetHigh: 700, targetLow: 450, lastUpdated: "2026-10-05 00:00:00" })).toEqual({
+      targetMean: 586.13, targetHigh: 700, targetLow: 450, targetUpdated: "2026-10-05",
+    });
+    expect(parsePriceTarget({ targetMean: 0 }).targetMean).toBeNull();
+    expect(parsePriceTarget({})).toMatchObject({ targetMean: null, targetUpdated: null });
+  });
+
+  it("asks for the price target only until Finnhub says it is not on this plan, and never throws", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      calls.push(String(url));
+      if (String(url).includes("price-target")) return new Response("no access", { status: 403 });
+      return new Response(JSON.stringify([{ period: "2026-10-01", strongBuy: 1, buy: 2, hold: 3, sell: 0, strongSell: 0 }]), { status: 200 });
+    }));
+    try {
+      const targets = { allowed: true };
+      const a = await fetchAnalysts("MSFT", "k", targets);
+      expect(a).toMatchObject({ recBuy: 2, recHold: 3, targetMean: null });
+      expect(targets.allowed).toBe(false);
+      await fetchAnalysts("NVDA", "k", targets);
+      expect(calls.filter((c) => c.includes("price-target"))).toHaveLength(1);
+      vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("network"); }));
+      expect(await fetchAnalysts("AMD", "k", { allowed: true })).toMatchObject({ recPeriod: null, targetMean: null });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("describeProfile: analysts", () => {
+  const recs = { recStrongBuy: 20, recBuy: 18, recHold: 6, recSell: 1, recStrongSell: 0, recPeriod: "2026-10-01" };
+
+  it("counts buy / hold / sell and says a buy majority is the usual case, not a strong signal", () => {
+    const a = line(recs, "analysts")!;
+    expect(a.value).toBe("ซื้อ 38 · ถือ 6 · ขาย 1");
+    expect(a.meaning).toContain("จาก 45 คน (ข้อมูลเดือน 2026-10)");
+    expect(a.meaning).toContain("ไม่ใช่สัญญาณที่แรงนัก");
+    expect(a.caution).toBe(false);
+  });
+
+  it("flags an unusual share of sell ratings, and shows nothing without data", () => {
+    expect(line({ ...recs, recStrongBuy: 2, recBuy: 2, recHold: 2, recSell: 3 }, "analysts")).toMatchObject({ caution: true });
+    expect(line({ recPeriod: null }, "analysts")).toBeUndefined();
+    expect(line({ ...recs, recStrongBuy: 0, recBuy: 0, recHold: 0, recSell: 0, recStrongSell: 0 }, "analysts")).toBeUndefined();
+  });
+
+  it("puts the average target against the card price and warns that targets run optimistic", () => {
+    const t = line({ targetMean: 250, targetLow: 200, targetHigh: 320 }, "target", 227.21)!;
+    expect(t.value).toBe("$250.00 (+10%)");
+    expect(t.meaning).toContain("(ต่ำสุด $200 – สูงสุด $320) สูงกว่าราคาตอนนี้ 10%");
+    expect(t.meaning).toContain("มักมองบวกเกินจริง");
+    expect(line({ targetMean: 200 }, "target", 227.21)!.meaning).toContain("ต่ำกว่าราคาตอนนี้ 12%");
+    expect(line({ targetMean: null }, "target")).toBeUndefined();
+  });
+
+  it("comes after the other figures, and the footnote names the source", () => {
+    const v = view({ ...recs, targetMean: 250 });
+    expect(v.lines.map((l) => l.key).slice(-2)).toEqual(["analysts", "target"]);
+    expect(v.footnote).toContain("นักวิเคราะห์จาก Finnhub");
   });
 });

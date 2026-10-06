@@ -2,9 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const saveFundamentals = vi.fn(async () => {});
 const symbolsNeedingFundamentals = vi.fn();
+const saveAnalysts = vi.fn(async () => {});
+const symbolsNeedingAnalysts = vi.fn(async (symbols: string[]) => new Set<string>(symbols));
 const fetchFundamentals = vi.fn();
-vi.mock("@/lib/db/profiles", () => ({ saveFundamentals, symbolsNeedingFundamentals }));
-vi.mock("@/lib/profile/finnhub", () => ({ fetchFundamentals }));
+const fetchAnalysts = vi.fn<(symbol: string) => Promise<{ recBuy: number }>>(async () => ({ recBuy: 3 }));
+vi.mock("@/lib/db/profiles", () => ({ saveFundamentals, symbolsNeedingFundamentals, saveAnalysts, symbolsNeedingAnalysts }));
+vi.mock("@/lib/profile/finnhub", () => ({ fetchFundamentals, fetchAnalysts }));
 
 const f = { pe: 20, forwardPe: 18, revenueGrowth: 10, netMargin: 15, beta: 1.1, dividendYield: null, nextEarnings: null, earningsHour: null };
 
@@ -51,5 +54,23 @@ describe("refreshFundamentals", () => {
     await refreshFundamentals({ symbols: ["KO"] });
     expect(symbolsNeedingFundamentals).not.toHaveBeenCalled();
     expect(saveFundamentals).toHaveBeenCalledWith("KO", f);
+  });
+
+  it("refreshes analyst views only for symbols whose views are stale (every few days), and their failure never fails a symbol", async () => {
+    symbolsNeedingFundamentals.mockResolvedValue(["AMD", "NVDA", "MU"]);
+    symbolsNeedingAnalysts.mockResolvedValueOnce(new Set(["NVDA", "MU"]));
+    fetchFundamentals.mockResolvedValue(f);
+    fetchAnalysts.mockImplementation(async (s: string) => {
+      if (s === "MU") throw new Error("HTTP 429");
+      return { recBuy: 3 };
+    });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { refreshFundamentals } = await import("./profiles");
+    const r = await refreshFundamentals({ now: new Date("2026-09-30T22:00:00Z") });
+    expect(symbolsNeedingAnalysts).toHaveBeenCalledWith(["AMD", "NVDA", "MU"], 72);
+    expect(fetchAnalysts.mock.calls.map((c) => c[0]).sort()).toEqual(["MU", "NVDA"]);
+    expect(saveAnalysts).toHaveBeenCalledTimes(1);
+    expect(r.updated.sort()).toEqual(["AMD", "MU", "NVDA"]);
+    expect(r.errors).toEqual({});
   });
 });

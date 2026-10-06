@@ -85,3 +85,27 @@ describe("recalculate with more symbols than the per-minute API limit", () => {
     expect(saveHistoryStats.mock.calls[0][0]).toBe(symbols[0]);
   });
 });
+
+describe("recalculateEverything", () => {
+  it("does every batch in one call, a minute apart", async () => {
+    vi.useFakeTimers();
+    try {
+      const { recalculateEverything } = await import("./recalculateSupports");
+      const { listSymbols } = await import("@/lib/db/symbols");
+      vi.mocked(listSymbols).mockResolvedValue(symbols);
+      const bars = Array.from({ length: 60 }, (_, i) => ({
+        date: new Date(Date.UTC(2026, 6, 1 + i)).toISOString().slice(0, 10),
+        open: 100, high: 102 + (i % 3), low: 98 - (i % 2), close: 100 + (i % 5), volume: 1,
+      }));
+      getCandlesApi.mockImplementation(async (batch: string[]) => ({ data: Object.fromEntries(batch.map((s) => [s, bars])), errors: {} }));
+      const done = recalculateEverything(now, { force: true });
+      await vi.advanceTimersByTimeAsync(5 * 61_000);
+      const r = await done;
+      expect(getCandlesApi.mock.calls.map(([s]) => (s as string[]).length)).toEqual([8, 8, 4]);
+      expect(r.updated).toHaveLength(20);
+      expect(r.remaining).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

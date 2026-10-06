@@ -12,6 +12,7 @@ import { findLateEvents } from "@/lib/alerts/lateCheck";
 import type { LateItem } from "@/lib/alerts/format";
 import { deliverLateAlerts } from "./checkAlerts";
 import { ensureLogo } from "./logos";
+import { BATCH_PAUSE_MS, pause } from "./quotes";
 import { refreshFundamentals } from "./profiles";
 
 /**
@@ -97,6 +98,31 @@ export async function recalculate(symbols: string[], now: Date, opts: { force?: 
 
 export async function recalculateAll(now: Date, opts: { force?: boolean; offset?: number } = {}): Promise<RecalcSummary> {
   return recalculate(await listSymbols(), now, opts);
+}
+
+/**
+ * Every batch in one call, a minute apart (the per-minute API limit), for an outside scheduler that makes ONE request.
+ * Stops starting new batches when the next pause would not fit `budgetMs`; a later run picks up what is left (without
+ * `force`, symbols already current are skipped).
+ */
+export async function recalculateEverything(now: Date, opts: { force?: boolean } = {}, budgetMs = 230_000): Promise<RecalcSummary> {
+  const started = Date.now();
+  let offset = 0;
+  const total: RecalcSummary = { session: "", updated: [], skipped: [], errors: {}, remaining: 0, next: 0 };
+  for (;;) {
+    const r = await recalculateAll(now, { force: opts.force, offset });
+    total.session = r.session;
+    total.updated.push(...r.updated);
+    total.skipped = r.skipped;
+    Object.assign(total.errors, r.errors);
+    if (r.lateAlerts) (total.lateAlerts ??= []).push(...r.lateAlerts);
+    if (r.lateAlertsError) total.lateAlertsError = r.lateAlertsError;
+    total.remaining = r.remaining;
+    total.next = r.next;
+    offset = r.next;
+    if (r.remaining === 0 || Date.now() - started + BATCH_PAUSE_MS > budgetMs) return total;
+    await pause(BATCH_PAUSE_MS);
+  }
 }
 
 /**

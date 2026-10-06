@@ -7,7 +7,7 @@ import { listSupports } from "@/lib/db/supports";
 import { listSymbols } from "@/lib/db/symbols";
 import { formatDateTime } from "@/lib/format/datetime";
 import { isMarketOpen, isWithinWindowAfterOpen, MARKET_TZ, nyToday } from "@/lib/market/calendar";
-import { getQuotes } from "./quotes";
+import { getQuotes, warmQuotes } from "./quotes";
 import { notify, recipients } from "./notify";
 
 export interface CheckSummary {
@@ -53,6 +53,8 @@ export function dailyCheckSlot(now: Date): string | null {
   }
   return null;
 }
+
+const WARM_BUDGET_MS = 200_000;
 
 type SkipReason = "market_closed" | "outside_daily_window" | "already_checked_today";
 
@@ -104,6 +106,8 @@ async function runCheck(now: Date, daily: boolean, summary: CheckSummary): Promi
 
   const symbols = await listSymbols();
   if (symbols.length === 0) return out({ ...summary, skipped: "no_symbols" });
+  // All quotes first, in per-minute batches (a no-op when the workflow already warmed them); 200 s of the route's 300 s.
+  await warmQuotes(symbols, WARM_BUDGET_MS);
 
   const [supports, states, quotes] = await Promise.all([listSupports(), loadStates(), getQuotes(symbols, now)]);
   summary.quotesFetched = quotes.fetched;

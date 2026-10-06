@@ -10,7 +10,8 @@ vi.mock("@/lib/db/alerts", () => ({
   stateKey: (s: string, t: string) => `${s}:${t}`,
 }));
 const getQuotes = vi.fn(async () => ({ prices: { NVDA: 180 } as Record<string, number>, lows: {}, prevCloses: {}, errors: {} as Record<string, string>, fetched: 1, cached: 0, remaining: 0 }));
-vi.mock("./quotes", () => ({ getQuotes }));
+const warmQuotes = vi.fn(async () => {});
+vi.mock("./quotes", () => ({ getQuotes, warmQuotes }));
 vi.mock("./notify", () => ({ notify: vi.fn(), recipients: vi.fn(async () => ["U1"]) }));
 
 const { checkAlerts, skipReason } = await import("./checkAlerts");
@@ -57,5 +58,11 @@ describe("once-a-day check", () => {
     expect(await skipReason(at("17:40"), { mode: "intraday" })).toBeUndefined();
     await checkAlerts(at("17:40"), { mode: "daily", force: true });
     expect(markRun).not.toHaveBeenCalled();
+  });
+
+  it("fetches every quote first (in batches), then checks", async () => {
+    await checkAlerts(at("17:40"), { mode: "daily" });
+    expect(warmQuotes).toHaveBeenCalledWith(["NVDA"], 200_000);
+    expect(warmQuotes.mock.invocationCallOrder[0]).toBeLessThan(getQuotes.mock.invocationCallOrder[0]);
   });
 });

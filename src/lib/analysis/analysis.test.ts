@@ -150,4 +150,19 @@ describe("prompts", () => {
     expect(MANUAL_PROMPT_RULES).toMatch(/Answer in readable Thai/);
     expect(SYSTEM_PROMPT).toMatch(/Reply with ONE JSON object/);
   });
+
+  it("tells the AI analyst ratings and targets are optimistic opinions, never a predicted price", () => {
+    expect(SYSTEM_PROMPT).toMatch(/opinions, not facts/);
+    expect(SYSTEM_PROMPT).toMatch(/never as a predicted price/);
+    expect(MANUAL_PROMPT_RULES).toMatch(/opinions, not facts/);
+  });
+});
+
+describe("buildStockInput: analysts", () => {
+  it("adds the latest ratings and the target against the price, or null when there are none", () => {
+    const p = { ...profile, recStrongBuy: 20, recBuy: 18, recHold: 6, recSell: 1, recStrongSell: 0, recPeriod: "2026-10-01", targetMean: 151.25 } as ProfileData;
+    expect(buildStockInput(tracked, 137.5, p, track, "2026-09-30").analysts).toEqual({ buy: 38, hold: 6, sell: 1, month: "2026-10", targetMean: 151.25, targetVsPricePct: 10 });
+    expect(buildStockInput(tracked, 137.5, profile, track, "2026-09-30").analysts).toBeNull();
+    expect(buildStockInput(tracked, 137.5, undefined, track, "2026-09-30").analysts).toBeNull();
+  });
 });

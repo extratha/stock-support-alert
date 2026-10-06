@@ -42,6 +42,8 @@ export interface StockInput {
   }[];
   /** a support level that broke recently and the price is still under */
   recentBreak: { tier: Tier; level: number; date: string } | null;
+  /** brokerage analysts' latest month of ratings and their average 12-month price target (opinions, often optimistic) */
+  analysts: { buy: number; hold: number; sell: number; month: string; targetMean: number | null; targetVsPricePct: number | null } | null;
 }
 
 /** The facts the AI may use, per stock, computed from our own data (numbers only: nothing free-text reaches the prompt). */
@@ -90,6 +92,7 @@ export function buildStockInput(
       };
     }),
     recentBreak: brk !== null && stillBelow ? { tier: brk.tier, level: round(brk.level, 2)!, date: brk.resolvedOn ?? brk.touchedOn } : null,
+    analysts: analystsOf(p, price),
   };
 }
 
@@ -100,10 +103,28 @@ Rules:
 - Use ONLY the JSON data you are given. Never invent figures, news, earnings results, ratings, or events. If a figure you would need is null, say it is unknown; do not guess.
 - Do not predict future prices and do not promise returns. This is not financial advice. Rank by how well each stock FITS THE GOALS on the given data, and say what could go wrong.
 - Support levels are reference prices where the price turned up before. The investor's own backtest found that buying at them has NOT been shown to beat buying on other days, so never present a level as a buy signal or a floor. Use them only to comment on where the price sits relative to them. "pastHeld" is how often this stock's past touches of that tier held, "pastRandomHeldPct" is the same rate for a random level at the same distance: a level only means something if pastHeld is clearly above it.
+- "analysts" are brokerage analysts' ratings and average price target: opinions, not facts. They lean heavily to "buy" (sell ratings are rare) and targets are usually optimistic, so treat them as one weak input, mention them as opinions, and never as a predicted price.
 - Be willing to pick fewer than ${MAX_PICKS} if fewer stocks really fit. Never pick a stock that is not in the data.
 - Write in Thai. Keep each reason/risk to one short sentence that cites a number from the data.`;
 
 /** The in-app run parses the reply, so it must be JSON. */
+function analystsOf(p: ProfileData | undefined, price: number | null): StockInput["analysts"] {
+  if (!p) return null;
+  const buy = (p.recStrongBuy ?? 0) + (p.recBuy ?? 0);
+  const hold = p.recHold ?? 0;
+  const sell = (p.recSell ?? 0) + (p.recStrongSell ?? 0);
+  const target = p.targetMean ?? null;
+  if (!p.recPeriod && target === null) return null;
+  return {
+    buy,
+    hold,
+    sell,
+    month: p.recPeriod ? p.recPeriod.slice(0, 7) : "",
+    targetMean: round(target, 2),
+    targetVsPricePct: target !== null && price !== null && price > 0 ? round((target / price - 1) * 100) : null,
+  };
+}
+
 export const SYSTEM_PROMPT = `${RULES}
 
 Reply with ONE JSON object and nothing else (no markdown fences), exactly in this shape:
