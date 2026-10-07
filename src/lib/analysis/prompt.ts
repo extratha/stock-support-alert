@@ -1,3 +1,4 @@
+import type { StockNews } from "@/lib/news/types";
 import type { ProfileData } from "@/lib/profile/describe";
 import type { TrackedSymbol } from "@/lib/db/symbols";
 import type { TrackSummary } from "@/lib/support/track";
@@ -44,6 +45,8 @@ export interface StockInput {
   recentBreak: { tier: Tier; level: number; date: string } | null;
   /** brokerage analysts' latest month of ratings and their average 12-month price target (opinions, often optimistic) */
   analysts: { buy: number; hold: number; sell: number; month: string; targetMean: number | null; targetVsPricePct: number | null } | null;
+  /** the latest news brief's reading of this stock (AI summary of free news), or null when there is none recent */
+  news: { direction: string; impact: string; summary: string; points: string[] } | null;
 }
 
 /** The facts the AI may use, per stock, computed from our own data (numbers only: nothing free-text reaches the prompt). */
@@ -53,6 +56,7 @@ export function buildStockInput(
   profile: ProfileData | undefined,
   track: TrackSummary,
   today: string,
+  news: StockNews | null = null,
 ): StockInput {
   const p = profile;
   const high = p?.high52w ?? null;
@@ -93,6 +97,9 @@ export function buildStockInput(
     }),
     recentBreak: brk !== null && stillBelow ? { tier: brk.tier, level: round(brk.level, 2)!, date: brk.resolvedOn ?? brk.touchedOn } : null,
     analysts: analystsOf(p, price),
+    news: news
+      ? { direction: news.direction, impact: news.impact, summary: news.summary, points: news.points.map((x) => `(${x.kind}) ${x.text}`) }
+      : null,
   };
 }
 
@@ -100,10 +107,11 @@ export function buildStockInput(
 const RULES = `You are a careful research assistant for ONE individual investor who already follows a short list of US stocks. From that list, pick the stocks most worth a closer look for a purchase NOW, given the investor's goals.
 
 Rules:
-- Use ONLY the JSON data you are given. Never invent figures, news, earnings results, ratings, or events. If a figure you would need is null, say it is unknown; do not guess.
+- Use ONLY the JSON data you are given. Never invent figures, news beyond the "news" field, earnings results, ratings, or events. If a figure you would need is null, say it is unknown; do not guess.
 - Do not predict future prices and do not promise returns. This is not financial advice. Rank by how well each stock FITS THE GOALS on the given data, and say what could go wrong.
 - Support levels are reference prices where the price turned up before. The investor's own backtest found that buying at them has NOT been shown to beat buying on other days, so never present a level as a buy signal or a floor. Use them only to comment on where the price sits relative to them. "pastHeld" is how often this stock's past touches of that tier held, "pastRandomHeldPct" is the same rate for a random level at the same distance: a level only means something if pastHeld is clearly above it.
 - "analysts" are brokerage analysts' ratings and average price target: opinions, not facts. They lean heavily to "buy" (sell ratings are rare) and targets are usually optimistic, so treat them as one weak input, mention them as opinions, and never as a predicted price.
+- "news" is an earlier AI summary of free news sources about the stock (may be incomplete or late; points marked (opinion) are writers' views, (inference) are guesses). Use it only as context, call it "ข่าว", and never add news that is not there. null = no recent news was found, not that nothing happened.
 - Be willing to pick fewer than ${MAX_PICKS} if fewer stocks really fit. Never pick a stock that is not in the data.
 - Write in Thai. Keep each reason/risk to one short sentence that cites a number from the data.`;
 

@@ -73,6 +73,18 @@ export const config = {
       ...(config.ai.models().length > 0 ? [] : ["AI_MODEL"]),
     ],
   },
+  /** The news brief (the "ข่าว" page): uses the AI settings above. */
+  news: {
+    /** Briefs per New York day, the scheduled one included (each is one AI call with a large prompt). */
+    dailyLimit: () => Math.max(1, Math.floor(num("NEWS_DAILY_LIMIT", 3))),
+    /** Most articles the AI reads per stock (the most relevant first). */
+    perStock: () => Math.min(15, Math.max(1, Math.floor(num("NEWS_PER_STOCK", 6)))),
+    /**
+     * Characters of article text in one prompt (about 4 characters per token). The default (~40k tokens) suits Gemini and
+     * OpenRouter; a provider with a small per-minute token limit (Groq's free tier) needs a smaller value.
+     */
+    maxChars: () => Math.max(20_000, Math.floor(num("NEWS_PROMPT_MAX_CHARS", 160_000))),
+  },
   alertTiers: (): Tier[] => {
     const raw = process.env.ALERT_TIERS?.split(",").map((t) => t.trim()).filter((t): t is Tier => (TIERS as readonly string[]).includes(t));
     return raw && raw.length > 0 ? raw : ["major"];

@@ -5,12 +5,13 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { hardNavigate } from "@/lib/hardNavigate";
-import { ActivityIcon, HistoryIcon, ListIcon, LogOutIcon, SparklesIcon, UsersIcon } from "./icons";
+import { ActivityIcon, HistoryIcon, ListIcon, LogOutIcon, NewspaperIcon, SparklesIcon, UsersIcon } from "./icons";
 import { Spinner } from "./Spinner";
 
 const links: { href: string; label: string; icon: ReactNode }[] = [
   { href: "/", label: "แนวรับปัจจุบัน", icon: <ActivityIcon /> },
   { href: "/analysis", label: "วิเคราะห์ด้วย AI", icon: <SparklesIcon /> },
+  { href: "/news", label: "ข่าว", icon: <NewspaperIcon /> },
   { href: "/symbols", label: "จัดการหุ้น", icon: <ListIcon /> },
   { href: "/recipients", label: "ผู้รับแจ้งเตือน", icon: <UsersIcon /> },
   { href: "/history", label: "ประวัติแจ้งเตือน", icon: <HistoryIcon /> },
@@ -50,7 +51,7 @@ function LogoutButton({ className = "" }: { className?: string }) {
       className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-sm text-muted transition-colors duration-150 hover:bg-elevated hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
     >
       {busy ? <Spinner /> : <LogOutIcon />}
-      <span>ออกจากระบบ</span>
+      <span className="whitespace-nowrap">ออกจากระบบ</span>
     </button>
   );
 }
@@ -87,7 +88,7 @@ function HamburgerIcon({ open }: { open: boolean }) {
 
 const isActive = (href: string, pathname: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
-/** Below 1024px: top bar = icon + title + hamburger, menu in a slide-in drawer. From 1024px: the inline menu. */
+/** Below 1280px: top bar = icon + title + hamburger, menu in a slide-in drawer. From 1280px: the inline menu (six links need the room). */
 export function Nav() {
   const pathname = usePathname();
   // The drawer is "open" only while we are still on the page where it was opened, so it closes by
@@ -130,7 +131,7 @@ export function Nav() {
       }
     };
     // growing past the breakpoint (rotating a tablet) must not leave the page locked
-    const wide = window.matchMedia("(min-width: 1024px)");
+    const wide = window.matchMedia("(min-width: 1280px)");
     const onWide = (e: MediaQueryListEvent) => e.matches && setOpenedAt(null);
 
     document.addEventListener("keydown", onKey);
@@ -156,13 +157,13 @@ export function Nav() {
           <Brand onClick={close} />
 
           {/* wide screens: the menu stays in the bar */}
-          <nav aria-label="เมนูหลัก" className="ml-3 hidden flex-1 items-center gap-x-2 lg:flex">
+          <nav aria-label="เมนูหลัก" className="ml-3 hidden flex-1 items-center gap-x-2 xl:flex">
             {links.map((l) => {
               const active = isActive(l.href, pathname);
               return (
                 <Link key={l.href} href={l.href} aria-current={active ? "page" : undefined} className={linkClass(active, "min-h-11 gap-2 text-sm")}>
                   <NavIcon icon={l.icon} />
-                  <span>{l.label}</span>
+                  <span className="whitespace-nowrap">{l.label}</span>
                 </Link>
               );
             })}
@@ -177,7 +178,7 @@ export function Nav() {
             aria-label={open ? "ปิดเมนู" : "เปิดเมนู"}
             aria-expanded={open}
             aria-controls="mobile-menu"
-            className={`ml-auto grid size-11 cursor-pointer place-items-center rounded-lg transition-colors duration-200 hover:bg-elevated lg:hidden ${
+            className={`ml-auto grid size-11 cursor-pointer place-items-center rounded-lg transition-colors duration-200 hover:bg-elevated xl:hidden ${
               open ? "text-primary" : "text-foreground"
             }`}
           >
@@ -192,7 +193,7 @@ export function Nav() {
       <div
         aria-hidden="true"
         onClick={close}
-        className={`fixed inset-x-0 bottom-0 top-14 z-10 bg-black/60 transition-opacity duration-300 lg:hidden ${
+        className={`fixed inset-x-0 bottom-0 top-14 z-10 bg-black/60 transition-opacity duration-300 xl:hidden ${
           open ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       />
@@ -200,7 +201,7 @@ export function Nav() {
         ref={drawerRef}
         id="mobile-menu"
         inert={!open}
-        className={`fixed bottom-0 left-0 top-14 z-20 flex w-72 max-w-[85vw] flex-col border-r border-border bg-card shadow-2xl shadow-black/50 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:hidden ${
+        className={`fixed bottom-0 left-0 top-14 z-20 flex w-72 max-w-[85vw] flex-col border-r border-border bg-card shadow-2xl shadow-black/50 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] xl:hidden ${
           open ? "translate-x-0" : "-translate-x-full invisible"
         }`}
       >

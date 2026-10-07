@@ -145,11 +145,22 @@ function shortReason(e: AiError): string {
  *   - a wrong key (401/403), a missing setting, or running out of time: stop, other models would fail the same way
  * Models have separate quotas with Google, so a later model usually works when the first one is used up for the day.
  */
-export async function chat({ system, user, models = config.ai.models() }: { system: string; user: string; models?: string[] }): Promise<ChatResult> {
+export async function chat({
+  system,
+  user,
+  models = config.ai.models(),
+  timeoutMs,
+}: {
+  system: string;
+  user: string;
+  models?: string[];
+  /** a shorter budget than AI_TIMEOUT_SECONDS, for a caller that spent part of its time on other work */
+  timeoutMs?: number;
+}): Promise<ChatResult> {
   const missing = config.ai.missing();
   if (missing.length > 0) throw new AiError(`ยังไม่ได้ตั้งค่า ${missing.join(", ")}`, "config");
 
-  const deadline = Date.now() + config.ai.timeoutMs();
+  const deadline = Date.now() + Math.min(config.ai.timeoutMs(), timeoutMs ?? Infinity);
   const skipped: SkippedModel[] = [];
   let last: AiError | undefined;
 

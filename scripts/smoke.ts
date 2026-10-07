@@ -11,7 +11,7 @@
 const base = (process.argv[2] ?? "http://localhost:3000").replace(/\/$/, "");
 const LIMIT_MS = 15_000;
 const ROUNDS = Number(process.env.SMOKE_ROUNDS ?? 3);
-const PATHS = ["/", "/symbols", "/history", "/recipients", "/api/symbols", "/api/prices"];
+const PATHS = ["/", "/analysis", "/news", "/symbols", "/history", "/recipients", "/api/symbols", "/api/prices"];
 
 async function login(): Promise<string> {
   const { SMOKE_USERNAME: username, SMOKE_PASSWORD: password } = process.env;

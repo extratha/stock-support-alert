@@ -192,3 +192,43 @@ alter table stock_profiles add column if not exists target_high double precision
 alter table stock_profiles add column if not exists target_low double precision;
 alter table stock_profiles add column if not exists target_updated date;
 alter table stock_profiles add column if not exists analysts_at timestamptz;
+
+-- Company name (Finnhub /stock/profile2), so news that names the company without the ticker is still matched.
+alter table symbols add column if not exists company_name text;
+alter table symbols add column if not exists company_name_checked_at timestamptz;
+
+-- News collected every hour (src/lib/jobs/news.ts): Finnhub company news for each tracked stock plus market news.
+-- `body` is the article text read from the publisher's page, kept only until it has been summarised (cleared after
+-- 7 days, rows deleted after 30): briefs keep the headline, source and link, never the text.
+create table if not exists news_articles (
+  id            bigserial primary key,
+  key           text not null unique,             -- "fh:<finnhub id>"
+  scope         text not null check (scope in ('company', 'market')),
+  symbols       text[] not null default '{}',     -- tracked stocks Finnhub filed it under
+  source        text not null,
+  headline      text not null,
+  summary       text not null default '',
+  url           text not null,                    -- Finnhub's redirect link
+  final_url     text,                             -- the publisher's page, once read
+  published_at  timestamptz not null,
+  body          text,
+  body_status   text check (body_status in ('ok', 'short', 'blocked', 'error', 'skipped')),
+  fetched_at    timestamptz,
+  created_at    timestamptz not null default now()
+);
+create index if not exists news_articles_published_idx on news_articles (published_at desc);
+
+-- One row per AI news brief (scheduled before the open, or run from the page). Reserved before the provider is called
+-- and deleted again on error, like ai_analyses.
+create table if not exists news_briefs (
+  id            bigserial primary key,
+  day           date not null,                    -- New York date of the run
+  created_at    timestamptz not null default now(),
+  trigger       text not null default 'manual',   -- schedule | manual
+  model         text not null,
+  status        text not null default 'pending' check (status in ('pending', 'ok')),
+  window_from   timestamptz,
+  window_to     timestamptz,
+  result        jsonb
+);
+create index if not exists news_briefs_day_idx on news_briefs (day);

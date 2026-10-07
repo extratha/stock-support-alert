@@ -4,6 +4,7 @@ import { AnalysisParseError, parseAnalysis } from "@/lib/analysis/parse";
 import type { AnalysisPick, AnalysisView, GoalId } from "@/lib/analysis/types";
 import { config } from "@/lib/config";
 import { cancelAnalysis, finishAnalysis, getAnalysis, startAnalysis } from "@/lib/db/analyses";
+import { latestBrief } from "@/lib/db/news";
 import { listProfiles } from "@/lib/db/profiles";
 import { listSupportTests } from "@/lib/db/supports";
 import { listTrackedSymbols } from "@/lib/db/symbols";
@@ -14,6 +15,8 @@ import { summarizeTrack } from "@/lib/support/track";
 import { getLivePrices } from "./livePrices";
 
 const PRICE_BUDGET_MS = 8000;
+/** A news brief older than this is not given to the AI (news goes stale fast). */
+const NEWS_MAX_AGE_MS = 36 * 3_600_000;
 
 export type AnalysisErrorCode = "bad_request" | "not_configured" | "no_symbols" | "limit" | "timeout" | "ai" | "parse";
 
@@ -82,13 +85,15 @@ type Data = Awaited<ReturnType<typeof loadData>>;
 
 /** Tracked stocks with their profiles and level history (database only). */
 async function loadData() {
-  const [tracked, profiles, tests] = await Promise.all([
+  const [tracked, profiles, tests, brief] = await Promise.all([
     listTrackedSymbols(),
     listProfiles().catch(() => []),
     listSupportTests().catch(() => []),
+    latestBrief().catch(() => null),
   ]);
   if (tracked.length === 0) throw new AnalysisError("ยังไม่มีหุ้นที่ track — เพิ่มที่หน้าจัดการหุ้นก่อน", "no_symbols");
-  return { tracked, profiles, tests };
+  const news = brief && Date.now() - Date.parse(brief.createdAt) < NEWS_MAX_AGE_MS ? brief.stocks : [];
+  return { tracked, profiles, tests, news };
 }
 
 /**
@@ -96,7 +101,7 @@ async function loadData() {
  * the scheduled check. Prices are capped at 8 s so they plus the AI call always fit in the function's 300 s (usually
  * instant: the cache is shared with the dashboard).
  */
-async function stockInputs({ tracked, profiles, tests }: Data, day: string): Promise<StockInput[]> {
+async function stockInputs({ tracked, profiles, tests, news }: Data, day: string): Promise<StockInput[]> {
   const live: Record<string, { price: number }> = await withTimeout(getLivePrices(tracked.map((s) => s.symbol)), PRICE_BUDGET_MS, "live prices")
     .then((r) => r.prices)
     .catch(() => ({}));
@@ -108,6 +113,7 @@ async function stockInputs({ tracked, profiles, tests }: Data, day: string): Pro
       profile ? toProfileData(profile) : undefined,
       summarizeTrack(tests.filter((t) => t.symbol === s.symbol), day),
       day,
+      news.find((n) => n.symbol === s.symbol) ?? null,
     );
   });
 }
