@@ -45,7 +45,7 @@ export const metadata: Metadata = {
   twitter: { card: "summary", title: SITE_NAME, description: SITE_DESCRIPTION },
   robots: { index: true, follow: true },
   // Google Search Console (URL-prefix property, "HTML tag" method): only the content value, Next.js writes the tag
-  verification: { google: "hSFeBYW2QwZmJsxgxLWxegJXbDRk57UgALTKCuXiAto" },
+  verification: { google: "TiAQd4s8bAlir4ak5Wn2lU_XTToeWB2X6xm39mBfgz0" },
 };
 
 export default async function RootLayout({
