@@ -44,10 +44,10 @@ export async function saveArticles(articles: RawArticle[]): Promise<number> {
   const fresh = [...byKey.values()].filter((a) => !stored.has(a.key));
   let added = 0;
   if (fresh.length > 0) {
-    // one statement for the lot (symbols travel comma-joined: a list of lists does not fit unnest)
+    // one statement for the lot (symbols travel comma-joined: a list of lists does not fit unnest; market news has none)
     const rows = await db`
       insert into news_articles (key, scope, symbols, source, headline, summary, url, published_at)
-      select k, sc, string_to_array(nullif(sy, ''), ','), so, h, su, u, p
+      select k, sc, coalesce(string_to_array(nullif(sy, ''), ','), '{}'), so, h, su, u, p
       from unnest(${fresh.map((a) => a.key)}::text[], ${fresh.map((a) => a.scope)}::text[], ${fresh.map((a) => a.symbols.join(","))}::text[],
                   ${fresh.map((a) => a.source)}::text[], ${fresh.map((a) => a.headline)}::text[], ${fresh.map((a) => a.summary)}::text[],
                   ${fresh.map((a) => a.url)}::text[], ${fresh.map((a) => a.publishedAt.toISOString())}::timestamptz[])
