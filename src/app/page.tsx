@@ -10,11 +10,14 @@ import { summarizeTrack } from "@/lib/support/track";
 import { TIER_LABEL_TH } from "@/lib/support/types";
 import { formatDateTime } from "@/lib/format/datetime";
 import { PAGE_DATA_TIMEOUT_MS, withTimeout } from "@/lib/timeout";
+import { isOwner } from "@/lib/viewer";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "แนวรับปัจจุบัน", description: "แนวรับของหุ้น US ที่ติดตาม คำนวณอัตโนมัติจาก Pivot, MA50/200, Swing Low และ Fibonacci พร้อมสถิติย้อนหลังว่าแนวรับเคยรับได้จริงไหม" };
 
 
 export default async function DashboardPage() {
+  const owner = await isOwner();
   const [stocks, profiles, tests] = await withTimeout(
     // the page still works without profiles or level history
     Promise.all([listTrackedSymbols(), listProfiles().catch(() => []), listSupportTests().catch(() => [])]),
@@ -26,11 +29,17 @@ export default async function DashboardPage() {
     return (
       <div className="surface p-8 text-center">
         <p className="text-muted">
-          ยังไม่มีหุ้นที่ track — ไปที่{" "}
-          <Link className="text-primary underline underline-offset-4" href="/symbols">
-            จัดการหุ้น
-          </Link>{" "}
-          เพื่อเพิ่ม symbol
+          {owner ? (
+            <>
+              ยังไม่มีหุ้นที่ track — ไปที่{" "}
+              <Link className="text-primary underline underline-offset-4" href="/symbols">
+                จัดการหุ้น
+              </Link>{" "}
+              เพื่อเพิ่ม symbol
+            </>
+          ) : (
+            "ยังไม่มีหุ้นที่ติดตาม"
+          )}
         </p>
       </div>
     );
@@ -64,7 +73,7 @@ export default async function DashboardPage() {
         </p>
       </div>
       {/* key: remount with the server order whenever the symbol list/order changes */}
-      <SortableStocks key={cards.map((c) => c.symbol).join(",")} initial={cards} today={today} />
+      <SortableStocks key={cards.map((c) => c.symbol).join(",")} initial={cards} today={today} readOnly={!owner} />
     </div>
   );
 }

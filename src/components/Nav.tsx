@@ -5,14 +5,14 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { hardNavigate } from "@/lib/hardNavigate";
-import { ActivityIcon, HistoryIcon, ListIcon, LogOutIcon, NewspaperIcon, SparklesIcon, UsersIcon } from "./icons";
+import { ActivityIcon, HistoryIcon, ListIcon, LogInIcon, LogOutIcon, NewspaperIcon, SparklesIcon, UsersIcon } from "./icons";
 import { Spinner } from "./Spinner";
 
-const links: { href: string; label: string; icon: ReactNode }[] = [
+const links: { href: string; label: string; visitorLabel?: string; icon: ReactNode }[] = [
   { href: "/", label: "แนวรับปัจจุบัน", icon: <ActivityIcon /> },
   { href: "/analysis", label: "วิเคราะห์ด้วย AI", icon: <SparklesIcon /> },
   { href: "/news", label: "ข่าว", icon: <NewspaperIcon /> },
-  { href: "/symbols", label: "จัดการหุ้น", icon: <ListIcon /> },
+  { href: "/symbols", label: "จัดการหุ้น", visitorLabel: "หุ้นที่ติดตาม", icon: <ListIcon /> },
   { href: "/recipients", label: "ผู้รับแจ้งเตือน", icon: <UsersIcon /> },
   { href: "/history", label: "ประวัติแจ้งเตือน", icon: <HistoryIcon /> },
 ];
@@ -56,6 +56,21 @@ function LogoutButton({ className = "" }: { className?: string }) {
   );
 }
 
+/** Visitors (public portfolio) get a way in; the owner gets a way out. */
+function AccountButton({ owner, pathname, className = "" }: { owner: boolean; pathname: string; className?: string }) {
+  if (owner) return <LogoutButton className={className} />;
+  const href = pathname === "/" ? "/login" : `/login?next=${encodeURIComponent(pathname)}`;
+  return (
+    <Link
+      href={href}
+      className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-sm text-muted transition-colors duration-150 hover:bg-elevated hover:text-foreground ${className}`}
+    >
+      <LogInIcon />
+      <span className="whitespace-nowrap">เข้าสู่ระบบ</span>
+    </Link>
+  );
+}
+
 function Brand({ onClick }: { onClick?: () => void }) {
   return (
     <Link href="/" onClick={onClick} className="flex min-h-11 items-center gap-2 font-semibold tracking-tight">
@@ -89,7 +104,8 @@ function HamburgerIcon({ open }: { open: boolean }) {
 const isActive = (href: string, pathname: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
 /** Below 1280px: top bar = icon + title + hamburger, menu in a slide-in drawer. From 1280px: the inline menu (six links need the room). */
-export function Nav() {
+/** `owner` = logged in (from the server); everyone else browses the public, read-only site. */
+export function Nav({ owner }: { owner: boolean }) {
   const pathname = usePathname();
   // The drawer is "open" only while we are still on the page where it was opened, so it closes by
   // itself as soon as navigation lands on another page (and the loading spinner stays visible until then).
@@ -143,7 +159,7 @@ export function Nav() {
     };
   }, [open]);
 
-  if (pathname === "/login") return null; // no navigation before signing in
+  if (pathname === "/login") return null; // the login page stands alone (it links back to the site)
 
   const linkClass = (active: boolean, size: string) =>
     `flex cursor-pointer items-center rounded-lg px-3 transition-colors duration-150 ${size} ${
@@ -163,11 +179,11 @@ export function Nav() {
               return (
                 <Link key={l.href} href={l.href} aria-current={active ? "page" : undefined} className={linkClass(active, "min-h-11 gap-2 text-sm")}>
                   <NavIcon icon={l.icon} />
-                  <span className="whitespace-nowrap">{l.label}</span>
+                  <span className="whitespace-nowrap">{owner ? l.label : (l.visitorLabel ?? l.label)}</span>
                 </Link>
               );
             })}
-            <LogoutButton className="ml-auto" />
+            <AccountButton owner={owner} pathname={pathname} className="ml-auto" />
           </nav>
 
           {/* narrow screens: hamburger only */}
@@ -217,13 +233,13 @@ export function Nav() {
                 className={linkClass(active, "min-h-12 gap-3 text-base")}
               >
                 <NavIcon icon={l.icon} />
-                <span>{l.label}</span>
+                <span>{owner ? l.label : (l.visitorLabel ?? l.label)}</span>
               </Link>
             );
           })}
         </nav>
         <div className="border-t border-border p-3">
-          <LogoutButton className="min-h-12 w-full text-base" />
+          <AccountButton owner={owner} pathname={pathname} className="min-h-12 w-full text-base" />
         </div>
       </div>
     </>

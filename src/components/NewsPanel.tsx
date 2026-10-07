@@ -171,12 +171,15 @@ export function NewsPanel({
   used: initialUsed,
   limit,
   missing,
+  readOnly = false,
 }: {
   initial: NewsBriefView | null;
   used: number;
   limit: number;
   /** AI environment variables not set yet (empty = ready) */
   missing: string[];
+  /** a visitor of the public site: the latest brief only, no button */
+  readOnly?: boolean;
 }) {
   const [brief, setBrief] = useState(initial);
   const [used, setUsed] = useState(initialUsed);
@@ -207,41 +210,47 @@ export function NewsPanel({
         <h1 className="text-2xl font-semibold tracking-tight">ข่าวที่กระทบหุ้น</h1>
         <p className="mt-1 text-sm text-muted">
           ระบบเก็บข่าวฟรีจาก Finnhub ทุกชั่วโมง ทั้งข่าวรายหุ้นและข่าวตลาด และอ่านเนื้อข่าวเต็มเมื่อเว็บต้นทางเปิดให้อ่าน แล้วให้ AI สรุปว่ากระทบหุ้นที่ track
-          อย่างไร ทุกวันทำการก่อนตลาดเปิด (หรือกดสรุปเองได้)
+          อย่างไร ทุกวันทำการก่อนตลาดเปิด{readOnly ? "" : " (หรือกดสรุปเองได้)"}
         </p>
       </div>
 
-      {!ready && (
+      {!readOnly && !ready && (
         <div role="alert" className="surface border-warning/40 p-4 text-sm">
           <p className="font-medium text-warning">ยังไม่ได้ตั้งค่า AI</p>
           <p className="mt-1 text-muted">ใช้ค่าเดียวกับหน้า &quot;วิเคราะห์ด้วย AI&quot;: {missing.join(", ")}</p>
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <button
-          type="button"
-          onClick={run}
-          disabled={busy || !ready || left === 0}
-          className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg bg-primary px-5 font-medium text-on-primary transition-[filter,opacity] duration-150 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {busy ? <Spinner /> : <NewspaperIcon />}
-          {busy ? "กำลังอ่านข่าว…" : "สรุปข่าวตอนนี้"}
-        </button>
-        <span className="text-xs text-muted">
-          วันนี้สรุปไปแล้ว <span className="font-mono tabular-nums">{used}/{limit}</span> ครั้ง (รวมรอบอัตโนมัติ)
-        </span>
-      </div>
+      {!readOnly && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <button
+            type="button"
+            onClick={run}
+            disabled={busy || !ready || left === 0}
+            className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg bg-primary px-5 font-medium text-on-primary transition-[filter,opacity] duration-150 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {busy ? <Spinner /> : <NewspaperIcon />}
+            {busy ? "กำลังอ่านข่าว…" : "สรุปข่าวตอนนี้"}
+          </button>
+          <span className="text-xs text-muted">
+            วันนี้สรุปไปแล้ว <span className="font-mono tabular-nums">{used}/{limit}</span> ครั้ง (รวมรอบอัตโนมัติ)
+          </span>
+        </div>
+      )}
 
-      <div aria-live="polite" className="min-h-5">
-        {busy && <p className="text-sm text-muted">กำลังดึงข่าวล่าสุดและให้ AI อ่าน ปกติ 1–3 นาที อาจนานถึงราว 5 นาที อย่าปิดหน้านี้</p>}
-        {error && <p className="text-sm text-danger">{error}</p>}
-      </div>
+      {!readOnly && (
+        <div aria-live="polite" className="min-h-5">
+          {busy && <p className="text-sm text-muted">กำลังดึงข่าวล่าสุดและให้ AI อ่าน ปกติ 1–3 นาที อาจนานถึงราว 5 นาที อย่าปิดหน้านี้</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
+        </div>
+      )}
 
       {brief ? (
         <Brief b={brief} />
       ) : (
-        <div className="surface p-8 text-center text-sm text-muted">ยังไม่มีสรุปข่าว — รอรอบก่อนตลาดเปิด หรือกด &quot;สรุปข่าวตอนนี้&quot;</div>
+        <div className="surface p-8 text-center text-sm text-muted">
+          {readOnly ? "ยังไม่มีสรุปข่าว — รอรอบก่อนตลาดเปิด" : <>ยังไม่มีสรุปข่าว — รอรอบก่อนตลาดเปิด หรือกด &quot;สรุปข่าวตอนนี้&quot;</>}
+        </div>
       )}
     </div>
   );

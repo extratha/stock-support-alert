@@ -4,7 +4,7 @@ import { SYMBOL_PATTERN } from "@/lib/symbol";
 export const dynamic = "force-dynamic";
 
 /**
- * A stored company logo (behind the login via proxy.ts). Pages link it as /api/logo/NVDA?v=<version>; the version
+ * A stored company logo (public, read-only: database only, never fetched from the internet here). Pages link it as /api/logo/NVDA?v=<version>; the version
  * changes whenever the logo does, so the browser can keep each one for a long time.
  */
 export async function GET(_request: Request, ctx: { params: Promise<{ symbol: string }> }) {

@@ -4,23 +4,25 @@ import { listSymbols } from "@/lib/db/symbols";
 import { getLivePrices } from "@/lib/jobs/livePrices";
 import { PAGE_DATA_TIMEOUT_MS, withTimeout } from "@/lib/timeout";
 import type { PriceEntry } from "@/lib/stock/live";
+import { isOwner } from "@/lib/viewer";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 20;
 
 /**
- * Current prices for the dashboard (behind the login via proxy.ts). Display only: nothing here
+ * Current prices for the dashboard (public, read-only). Display only: nothing here
  * feeds alerts. Only tracked symbols are queried (never user-supplied ones).
  *
  *   GET /api/prices           cached for LIVE_PRICE_TTL_SECONDS (shared by everyone, in the DB)
- *   GET /api/prices?force=1   the refresh button: skips that cache (rate-limited per symbol)
+ *   GET /api/prices?force=1   the owner's refresh button: skips that cache (rate-limited per symbol; ignored for visitors)
  *
  * Always answers within ~15 s: external sources share one deadline, and a symbol that none of
  * them could give falls back to the last cached live price, then to the price saved by the
  * scheduled Twelve Data check.
  */
 export async function GET(request: Request) {
-  const force = new URL(request.url).searchParams.get("force") === "1";
+  // only the owner's refresh button may skip the shared cache: visitors cannot make us call the price APIs more often
+  const force = new URL(request.url).searchParams.get("force") === "1" && (await isOwner());
   try {
     const symbols = await withTimeout(listSymbols(), PAGE_DATA_TIMEOUT_MS, "list symbols");
     const [live, saved] = await Promise.all([

@@ -1,10 +1,10 @@
 /**
  * Smoke / speed check against a RUNNING app (local `next start` or the Vercel deployment).
  *
- *   SMOKE_USERNAME=... SMOKE_PASSWORD=... npm run smoke -- https://your-app.vercel.app
- *   npm run smoke -- http://localhost:3000            (local dev without ADMIN_PASSWORD: no login needed)
+ *   npm run smoke -- https://your-app.vercel.app      as a visitor of the public site (no login)
+ *   SMOKE_USERNAME=... SMOKE_PASSWORD=... npm run smoke -- https://your-app.vercel.app   as the owner
  *
- * Logs in, then loads every page and API several times, all at once (like a browser prefetching
+ * Optionally logs in, then loads every page and API several times, all at once (like a browser prefetching
  * the menu). Any request that fails, answers non-200, or takes longer than LIMIT_MS (15 s) is a
  * FAILURE and the script exits with code 1. Only read-only requests are made.
  */
@@ -15,7 +15,7 @@ const PATHS = ["/", "/analysis", "/news", "/symbols", "/history", "/recipients",
 
 async function login(): Promise<string> {
   const { SMOKE_USERNAME: username, SMOKE_PASSWORD: password } = process.env;
-  if (!username || !password) return ""; // works for local dev, where login is disabled
+  if (!username || !password) return ""; // a visitor: every page is public (read-only)
   const res = await fetch(`${base}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: base },

@@ -13,13 +13,15 @@ export interface LineUser {
   label: string | null;
   active: boolean;
   notify: boolean;
+  /** the profile picture may be shown on the public site */
+  publicPhoto: boolean;
   followedAt: Date;
 }
 
 export async function listUsers(): Promise<LineUser[]> {
   return sql()<LineUser[]>`
     select user_id as "userId", display_name as "displayName", picture_url as "pictureUrl",
-           label, active, notify, followed_at as "followedAt"
+           label, active, notify, public_photo as "publicPhoto", followed_at as "followedAt"
     from line_users
     order by active desc, notify desc, followed_at`;
 }
@@ -58,6 +60,11 @@ export async function saveProfile(userId: string, profile: { displayName: string
 
 export async function setLabel(userId: string, label: string | null): Promise<boolean> {
   const rows = await sql()`update line_users set label = ${label} where user_id = ${userId} returning user_id`;
+  return rows.length > 0;
+}
+
+export async function setPublicPhoto(userId: string, on: boolean): Promise<boolean> {
+  const rows = await sql()`update line_users set public_photo = ${on} where user_id = ${userId} returning user_id`;
   return rows.length > 0;
 }
 

@@ -3,6 +3,8 @@ import { loadAuthSetup } from "@/lib/auth";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+/** Methods a visitor without a session may use: reading only. */
+const READ_METHODS = new Set(["GET", "HEAD"]);
 
 /** Browsers always send Origin (or Sec-Fetch-Site) on cross-site writes; reject those. */
 function isCrossSiteWrite(request: NextRequest): boolean {
@@ -19,7 +21,9 @@ function isCrossSiteWrite(request: NextRequest): boolean {
 }
 
 /**
- * Gate the dashboard and management API behind the login session cookie.
+ * Public, read-only portfolio: anyone may READ (GET/HEAD: every page and the read-only APIs), only the logged-in owner
+ * may change anything (any other method needs the session cookie, else 401). Pages decide for themselves what a
+ * visitor sees (src/lib/viewer.ts: no buttons, LINE data masked on the server).
  * /api/cron/* and /api/line/webhook are excluded by the matcher: they authenticate
  * themselves (bearer secret / LINE signature) and are called by machines.
  */
@@ -35,14 +39,18 @@ export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   if (pathname === "/login" || pathname.startsWith("/api/auth/")) return NextResponse.next();
 
+  // reading is public
+  if (READ_METHODS.has(request.method)) return NextResponse.next();
+
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   if (token && verifySessionToken(token, setup.config)) return NextResponse.next();
 
   if (pathname.startsWith("/api/")) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
+  // a write to a page (a form post): send the visitor to the login, then back
   const login = new URL("/login", request.url);
   if (pathname !== "/") login.searchParams.set("next", pathname + search);
-  return NextResponse.redirect(login);
+  return NextResponse.redirect(login, 303);
 }
 
 export const config = {

@@ -5,6 +5,7 @@ import { PAGE_DATA_TIMEOUT_MS, withTimeout } from "@/lib/timeout";
 import { METHOD_LABEL, type Method } from "@/lib/support/types";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "ประวัติการแจ้งเตือน", description: "ประวัติการแจ้งเตือนเมื่อราคาหุ้นแตะแนวรับ" };
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
 

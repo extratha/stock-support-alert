@@ -85,6 +85,7 @@ export function AnalysisPanel({
   limit,
   missing,
   models,
+  readOnly = false,
 }: {
   initial: AnalysisView | null;
   used: number;
@@ -93,6 +94,8 @@ export function AnalysisPanel({
   missing: string[];
   /** models from AI_MODEL: the first is the default, the rest are fallbacks and can be picked */
   models: string[];
+  /** a visitor of the public site: the latest result only, no controls */
+  readOnly?: boolean;
 }) {
   const [goals, setGoals] = useState<Set<GoalId>>(new Set());
   const [model, setModel] = useState(models[0] ?? "");
@@ -157,6 +160,20 @@ export function AnalysisPanel({
     } finally {
       setBusy(false);
     }
+  }
+
+  if (readOnly) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">วิเคราะห์ด้วย AI</h1>
+          <p className="mt-1 text-sm text-muted">
+            ผลล่าสุดที่เจ้าของระบบสั่งวิเคราะห์: ส่งหุ้นทุกตัวที่ track พร้อมราคา ข้อมูลพื้นฐาน ความเสี่ยง แนวรับ และสรุปข่าว ให้ AI จัดอันดับตัวที่ควรดูต่อสูงสุด 5 ตัว ตามเป้าหมายที่เลือก
+          </p>
+        </div>
+        {result ? <Result a={result} /> : <div className="surface p-8 text-center text-sm text-muted">ยังไม่มีผลวิเคราะห์</div>}
+      </div>
+    );
   }
 
   return (

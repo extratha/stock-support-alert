@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { config } from "@/lib/config";
-import { setLabel, setNotify } from "@/lib/db/lineUsers";
+import { setLabel, setNotify, setPublicPhoto } from "@/lib/db/lineUsers";
 import { sendEnabledNotice, type NoticeResult } from "@/lib/jobs/notify";
 import { LINE_USER_ID_PATTERN, MAX_LABEL_LENGTH } from "@/lib/line/userId";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Update one LINE friend from the "ผู้รับแจ้งเตือน" page (behind ADMIN_PASSWORD via proxy.ts).
- * Body: { notify?: boolean, label?: string | null }
+ * Body: { notify?: boolean, label?: string | null, publicPhoto?: boolean }
  * Switching push ON (off -> on) also sends that user a one-off notice via LINE push
  * (rate-limited, costs 1 message of push quota); the response says what happened: `notice`.
  */
@@ -16,8 +16,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ userId: s
   const { userId } = await ctx.params;
   if (!LINE_USER_ID_PATTERN.test(userId)) return NextResponse.json({ error: "invalid userId" }, { status: 400 });
 
-  const body = (await request.json().catch(() => null)) as { notify?: unknown; label?: unknown } | null;
-  if (!body || (body.notify === undefined && body.label === undefined)) {
+  const body = (await request.json().catch(() => null)) as { notify?: unknown; label?: unknown; publicPhoto?: unknown } | null;
+  if (!body || (body.notify === undefined && body.label === undefined && body.publicPhoto === undefined)) {
     return NextResponse.json({ error: "nothing to update" }, { status: 400 });
   }
   if (body.notify !== undefined && typeof body.notify !== "boolean") {
@@ -25,6 +25,12 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ userId: s
   }
   if (body.label !== undefined && body.label !== null && typeof body.label !== "string") {
     return NextResponse.json({ error: "label must be a string" }, { status: 400 });
+  }
+  if (body.publicPhoto !== undefined && typeof body.publicPhoto !== "boolean") {
+    return NextResponse.json({ error: "publicPhoto must be a boolean" }, { status: 400 });
+  }
+  if (body.publicPhoto !== undefined && !(await setPublicPhoto(userId, body.publicPhoto))) {
+    return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
   if (body.label !== undefined) {

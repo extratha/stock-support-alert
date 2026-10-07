@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const setNotify = vi.fn();
 const setLabel = vi.fn();
+const setPublicPhoto = vi.fn();
 const sendEnabledNotice = vi.fn();
-vi.mock("@/lib/db/lineUsers", () => ({ setNotify, setLabel }));
+vi.mock("@/lib/db/lineUsers", () => ({ setNotify, setLabel, setPublicPhoto }));
 vi.mock("@/lib/jobs/notify", () => ({ sendEnabledNotice }));
 
 const USER = `U${"a".repeat(32)}`;
@@ -21,10 +22,23 @@ beforeEach(() => {
   delete process.env.MAX_PUSH_RECIPIENTS;
   setNotify.mockResolvedValue("enabled");
   setLabel.mockResolvedValue(true);
+  setPublicPhoto.mockResolvedValue(true);
   sendEnabledNotice.mockResolvedValue("sent");
 });
 
 describe("PATCH /api/line/users/[userId]", () => {
+  it("switches the public profile picture on and off, and checks the type", async () => {
+    expect((await call(USER, { publicPhoto: true })).status).toBe(200);
+    expect(setPublicPhoto).toHaveBeenLastCalledWith(USER, true);
+    expect((await call(USER, { publicPhoto: false })).status).toBe(200);
+    expect(setPublicPhoto).toHaveBeenLastCalledWith(USER, false);
+    expect((await call(USER, { publicPhoto: "yes" })).status).toBe(400);
+    setPublicPhoto.mockResolvedValueOnce(false);
+    expect((await call(USER, { publicPhoto: true })).status).toBe(404);
+    expect(setNotify).not.toHaveBeenCalled();
+    expect(sendEnabledNotice).not.toHaveBeenCalled();
+  });
+
   it("rejects a malformed userId and empty / wrong-typed bodies", async () => {
     expect((await call("not-a-user", { notify: true })).status).toBe(400);
     expect((await call(USER, {})).status).toBe(400);

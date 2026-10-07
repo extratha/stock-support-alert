@@ -12,9 +12,37 @@ interface Props {
   initial: { symbol: string; logoVersion: number | null }[];
   max: number;
   subscribers: number;
+  /** a visitor of the public site: the list only */
+  readOnly?: boolean;
 }
 
-export function SymbolManager({ initial, max, subscribers }: Props) {
+/** What a visitor sees: the tracked symbols, nothing to click. */
+function ReadOnlyList({ initial, subscribers }: Pick<Props, "initial" | "subscribers">) {
+  return (
+    <div className="space-y-4">
+      <ul className="surface grid gap-x-4 divide-y divide-border sm:grid-cols-2 sm:divide-y-0">
+        {initial.length === 0 && <li className="p-4 text-muted">ยังไม่มีหุ้น</li>}
+        {initial.map(({ symbol: s, logoVersion }) => (
+          <li key={s} className="flex items-center gap-3 px-4 py-2.5">
+            <StockLogo symbol={s} version={logoVersion} className="size-8" />
+            <span className="font-mono text-base font-semibold tracking-wide">{s}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-sm text-muted">
+        ติดตาม <span className="font-mono text-foreground">{initial.length}</span> ตัว · ผู้รับแจ้งเตือนผ่าน LINE{" "}
+        <span className="font-mono text-foreground">{subscribers}</span> คน
+      </p>
+    </div>
+  );
+}
+
+export function SymbolManager({ initial, max, subscribers, readOnly = false }: Props) {
+  if (readOnly) return <ReadOnlyList initial={initial} subscribers={subscribers} />;
+  return <Manager initial={initial} max={max} subscribers={subscribers} />;
+}
+
+function Manager({ initial, max, subscribers }: Props) {
   const router = useRouter();
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);

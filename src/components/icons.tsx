@@ -106,3 +106,8 @@ export const NewspaperIcon = (p: SVGProps<SVGSVGElement>) => (
     <rect width="8" height="4" x="10" y="6" rx="1" />
   </Icon>
 );
+export const LogInIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" />
+  </Icon>
+);

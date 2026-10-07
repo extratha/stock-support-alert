@@ -38,7 +38,7 @@ export interface LineProfile {
 
 /**
  * The Messaging API exposes the display name and picture only. It never reveals the
- * user's LINE ID (e.g. "extratha"). Returns null when the user is not (or no longer) a friend.
+ * user's LINE ID. Returns null when the user is not (or no longer) a friend.
  */
 export async function getProfile(userId: string): Promise<LineProfile | null> {
   const res = await fetch(`https://api.line.me/v2/bot/profile/${encodeURIComponent(userId)}`, {

@@ -20,26 +20,47 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 
-describe("proxy (login session)", () => {
-  it("redirects an anonymous page visit to /login and remembers where they were going", async () => {
-    const res = proxy(req("/symbols?tab=1"));
-    expect(res.status).toBe(307);
+describe("proxy (public read-only site, owner session for changes)", () => {
+  it("lets anyone READ every page and the read-only APIs without a session", () => {
+    for (const path of ["/", "/symbols?tab=1", "/recipients", "/news", "/analysis", "/history", "/api/prices", "/api/symbols", "/api/logo/NVDA"]) {
+      expect(passesThrough(proxy(req(path))), path).toBe(true);
+      expect(passesThrough(proxy(req(path, { method: "HEAD" }))), path).toBe(true);
+    }
+  });
+
+  it("answers every anonymous change with 401 JSON (no redirect)", async () => {
+    const writes: [string, string][] = [
+      ["POST", "/api/symbols"],
+      ["DELETE", "/api/symbols/NVDA"],
+      ["PUT", "/api/symbols/order"],
+      ["PATCH", "/api/line/users/U0123456789abcdef0123456789abcdef"],
+      ["POST", "/api/line/users/refresh"],
+      ["POST", "/api/line/test"],
+      ["POST", "/api/analysis"],
+      ["POST", "/api/analysis/prompt"],
+      ["POST", "/api/news"],
+      ["OPTIONS", "/api/symbols"],
+    ];
+    for (const [method, path] of writes) {
+      const res = proxy(req(path, { method }));
+      expect(res.status, `${method} ${path}`).toBe(401);
+      expect(await res.json()).toEqual({ error: "unauthorized" });
+    }
+  });
+
+  it("sends an anonymous form post on a page to the login and back", () => {
+    const res = proxy(req("/symbols?tab=1", { method: "POST" }));
+    expect(res.status).toBe(303);
     expect(new URL(res.headers.get("location")!).pathname).toBe("/login");
     expect(new URL(res.headers.get("location")!).searchParams.get("next")).toBe("/symbols?tab=1");
-    expect(new URL(proxy(req("/")).headers.get("location")!).search).toBe(""); // home needs no ?next
   });
 
-  it("answers anonymous API calls with 401 JSON (no redirect)", async () => {
-    const res = proxy(req("/api/symbols"));
-    expect(res.status).toBe(401);
-    expect(await res.json()).toEqual({ error: "unauthorized" });
-  });
-
-  it("lets a valid session through, and rejects forged / expired / other-user tokens", () => {
-    expect(passesThrough(proxy(req("/symbols", { cookie: createSessionToken(config) })))).toBe(true);
-    expect(proxy(req("/symbols", { cookie: "forged.value" })).status).toBe(307);
-    expect(proxy(req("/symbols", { cookie: createSessionToken(config, Date.now() - 8 * 24 * 3600 * 1000) })).status).toBe(307);
-    expect(proxy(req("/symbols", { cookie: createSessionToken({ ...config, password: "other" }) })).status).toBe(307);
+  it("lets a valid session change things, and rejects forged / expired / other-user tokens", () => {
+    const post = (cookie: string) => proxy(req("/api/symbols", { method: "POST", cookie }));
+    expect(passesThrough(post(createSessionToken(config)))).toBe(true);
+    expect(post("forged.value").status).toBe(401);
+    expect(post(createSessionToken(config, Date.now() - 8 * 24 * 3600 * 1000)).status).toBe(401);
+    expect(post(createSessionToken({ ...config, password: "other" })).status).toBe(401);
   });
 
   it("keeps the login page and auth endpoints public", () => {

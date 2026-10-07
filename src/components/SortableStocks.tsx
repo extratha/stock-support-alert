@@ -100,7 +100,20 @@ function CopyButton({ text }: { text: () => string }) {
 }
 
 /** Fundamentals and risk, each figure followed by what it means in plain words. */
-function ProfileSection({ symbol, profile, price, today }: { symbol: string; profile: ProfileData | null; price: number | null; today: string }) {
+function ProfileSection({
+  symbol,
+  profile,
+  price,
+  today,
+  copyable,
+}: {
+  symbol: string;
+  profile: ProfileData | null;
+  price: number | null;
+  today: string;
+  /** the copy button is for the owner (visitors of the public site get no controls) */
+  copyable: boolean;
+}) {
   const view = describeProfile(profile ?? undefined, price, today);
   if (view.lines.length === 0) {
     return <p className="mt-4 text-xs text-muted">ข้อมูลพื้นฐานและความเสี่ยงจะแสดงหลังรอบอัปเดตรายวัน</p>;
@@ -109,7 +122,7 @@ function ProfileSection({ symbol, profile, price, today }: { symbol: string; pro
     <details open className="group mt-4 rounded-xl border border-border bg-background/40">
       <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
         <span className="flex-1">ข้อมูลพื้นฐานและความเสี่ยง</span>
-        <CopyButton text={() => profileText(symbol, price, today, view)} />
+        {copyable && <CopyButton text={() => profileText(symbol, price, today, view)} />}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true" className="size-4 text-muted transition-transform duration-200 group-open:rotate-180">
           <path d="m6 9 6 6 6-6" />
         </svg>
@@ -139,6 +152,7 @@ function StockCard({
   dragging,
   handle,
   today,
+  readOnly = false,
 }: {
   stock: StockCardData;
   live?: PriceEntry;
@@ -147,6 +161,8 @@ function StockCard({
   handle?: ReactNode;
   /** New York date, for "earnings in N days" */
   today: string;
+  /** public visitor: no controls */
+  readOnly?: boolean;
 }) {
   // Live price (display only) wins; otherwise the price saved by the scheduled Twelve Data check.
   const s = { ...stock, price: live?.price ?? stock.price };
@@ -230,7 +246,7 @@ function StockCard({
           ของหุ้นตัวนี้ ถ้าแนวรับรับได้ไม่มากกว่าระดับมั่ว ก็ไม่ได้มีความหมายพิเศษ — สถิติในอดีต ไม่ใช่การรับประกัน
         </p>
       )}
-      {!dragging && <ProfileSection symbol={s.symbol} profile={s.profile} price={s.price} today={today} />}
+      {!dragging && <ProfileSection symbol={s.symbol} profile={s.profile} price={s.price} today={today} copyable={!readOnly} />}
       {s.asOf && !dragging && (
         <p className="mt-3 text-xs text-muted">
           คำนวณจากข้อมูลถึง {formatDateString(s.asOf)} (close <span className="font-mono">{usd(s.refClose ?? 0)}</span>)
@@ -285,7 +301,8 @@ async function loadPrices(force = false): Promise<Record<string, PriceEntry>> {
   return ((await res.json()) as { prices: Record<string, PriceEntry> }).prices;
 }
 
-export function SortableStocks({ initial, today }: { initial: StockCardData[]; today: string }) {
+/** `readOnly` = a visitor of the public site: the cards and live prices, without dragging, refreshing or copying. */
+export function SortableStocks({ initial, today, readOnly = false }: { initial: StockCardData[]; today: string; readOnly?: boolean }) {
   const [stocks, setStocks] = useState(initial);
   const [status, setStatus] = useState<{ kind: "saving" | "saved" | "error"; text: string } | null>(null);
   const [prices, setPrices] = useState<Record<string, PriceEntry>>({});
@@ -342,6 +359,21 @@ export function SortableStocks({ initial, today }: { initial: StockCardData[]; t
       setStocks(previous);
       setStatus({ kind: "error", text: "บันทึกลำดับไม่สำเร็จ — คืนลำดับเดิมแล้ว ลองอีกครั้ง" });
     }
+  }
+
+  if (readOnly) {
+    return (
+      <div className="space-y-3">
+        {priceState === "error" && <p className="text-sm text-warning">ดึงราคาสดไม่ได้ — ใช้ราคาจากรอบเช็กล่าสุด</p>}
+        <div className="grid gap-4 md:grid-cols-2">
+          {stocks.map((s) => (
+            <section key={s.symbol} className="surface p-5">
+              <StockCard stock={s} live={prices[s.symbol]} today={today} readOnly />
+            </section>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (

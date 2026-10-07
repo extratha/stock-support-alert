@@ -232,3 +232,8 @@ create table if not exists news_briefs (
   result        jsonb
 );
 create index if not exists news_briefs_day_idx on news_briefs (day);
+
+-- Public portfolio: a friend's LINE profile picture is shown to visitors only when the owner switched this on for that
+-- friend (meant for the owner's own account). Everyone else is shown as a placeholder; names and ids never leave the
+-- server for visitors.
+alter table line_users add column if not exists public_photo boolean not null default false;

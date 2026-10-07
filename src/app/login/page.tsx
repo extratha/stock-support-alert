@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/LoginForm";
@@ -6,7 +7,7 @@ import { safeNextPath } from "@/lib/safeNext";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "เข้าสู่ระบบ · Stock Support Alert" };
+export const metadata = { title: "เข้าสู่ระบบ", robots: { index: false, follow: false } };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const next = safeNextPath((await searchParams).next);
@@ -29,11 +30,16 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             <h1 className="text-xl font-semibold tracking-tight">
               Stock<span className="text-primary">Support</span>
             </h1>
-            <p className="mt-1 text-sm text-muted">เข้าสู่ระบบเพื่อจัดการแนวรับและผู้รับแจ้งเตือน</p>
+            <p className="mt-1 text-sm text-muted">สำหรับเจ้าของระบบ — ผู้เยี่ยมชมดูทุกหน้าได้โดยไม่ต้องเข้าสู่ระบบ</p>
           </div>
         </div>
         <LoginForm next={next} />
       </div>
+      <p className="mt-4 text-center text-sm">
+        <Link href={next} className="text-muted underline-offset-4 hover:text-primary hover:underline">
+          ← กลับไปดูหน้าเว็บ
+        </Link>
+      </p>
     </div>
   );
 }
